@@ -1,24 +1,50 @@
 # GitHub Summary Agent
 
-An agent that fetches a GitHub project's git activity and open issues, then asks
-`kiro-cli` to write a management memo (in Markdown) analysing the project's
-**direction**, **major contributors**, and **health**.
+An agent that analyses one or many GitHub projects' git activity, issues, and
+pull requests, asks `kiro-cli` to write a per-project management memo (in
+Markdown), and rolls everything up into a single fleet report grouping projects
+by how much management attention they need.
 
 The access policy for the agent is defined in [AGENTS.md](AGENTS.md).
 
 ## How it works
 
-The pipeline has three tools, orchestrated by `summarise_project`:
+For each repository, orchestrated by `run_repo`:
 
-1. **Git log tool** (`git_log_tool.py`) — runs `git log` over a time window on a
-   local clone of the project and collects commits (author, date, subject).
-2. **Open issues tool** (`issues_tool.py`) — uses `curl` against the GitHub REST
-   API to fetch open issues (used for the project-direction analysis).
-3. **Memo generation** (`memo.py`) — builds a prompt from the log and issues and
-   pipes it to `kiro-cli`, which returns the Markdown memo.
+1. **Clone tool** (`clone_tool.py`) — clones the repo into the working directory
+   (or fetches/fast-forwards an existing clone) using `git`.
+2. **Git log tool** (`git_log_tool.py`) — runs `git log` over a time window and
+   collects commits (author, date, subject).
+3. **Issues tool** (`issues_tool.py`) — fetches both open and closed issues via
+   `curl` against the GitHub REST API.
+4. **Pull requests tool** (`pulls_tool.py`) — fetches both open and closed
+   (including merged) pull requests.
+5. **Health classification** (`health.py`) — deterministically sorts the repo
+   into `healthy`, `attention`, or `investigate` from the collected counts.
+6. **Memo generation** (`memo.py`) — builds a prompt from the commits, issues,
+   and pull requests and pipes it to `kiro-cli` for the Markdown memo.
 
-The memo is written to the `output/` directory, which is the only location the
-agent is permitted to write to.
+Across all repos, `run_fleet` writes `output/fleet-report.md` grouping projects
+into: requires management attention, needs investigation / keep an eye on, and
+healthy (no attention needed).
+
+The issues and pull requests (open and closed) let the memo identify active
+contributors and community members by cross-referencing commit authors with
+issue and PR authors, since commit authorship alone understates who is active.
+Shared GitHub API plumbing (auth, redirects, error handling) lives in
+`github_api.py`.
+
+### Skipping unchanged analyses
+
+Re-running kiro-cli for every repo is expensive. After each analysis the agent
+stores an input *fingerprint* (commit count and latest commit, plus open/closed
+issue and PR counts and newest timestamps) next to the memo. On a later run, if
+the fingerprint is unchanged the existing memo is reused and kiro-cli is not
+called again. Use `--force` to re-analyse regardless.
+
+All memos, reports, state files, and repository clones are written under the
+`output/` directory, which is the only location the agent is permitted to write
+to.
 
 ## Requirements
 
@@ -48,53 +74,51 @@ it won't leak into your shell history or process listings.
 
 ## Usage
 
-The git log tool reads a **local clone**, so first clone the target project,
-then point the agent at it.
+The agent clones the repositories for you, so you no longer pass a local path.
+
+### Many repositories (config file)
+
+Create a TOML config (see [`repos.toml.example`](repos.toml.example)):
+
+```toml
+since = "90 days ago"
+work_dir = "output/repos"
+output_dir = "output"
+repos = [
+    "metal3-io/metal3-dev-env",
+    "metal3-io/baremetal-operator",
+    "metal3-io/ip-address-manager",
+]
+```
+
+Then run:
 
 ```bash
-# 1. Clone the target project
-git clone https://github.com/metal3-io/metal3-dev-env.git /tmp/metal3-dev-env
+.venv/bin/python -m github_summary_agent --config repos.toml
+```
 
-# 2. Run the agent for the last 30 days
+This clones each repo under `output/repos/`, writes one memo per repo
+(`output/<owner>__<name>-memo.md`), and a roll-up at `output/fleet-report.md`.
+
+### A single repository
+
+```bash
 .venv/bin/python -m github_summary_agent \
     --repo metal3-io/metal3-dev-env \
-    --repo-path /tmp/metal3-dev-env \
     --since "30 days ago"
-```
-
-This writes `output/metal3-io__metal3-dev-env-memo.md`.
-
-### More examples
-
-Summarise a fixed date range:
-
-```bash
-.venv/bin/python -m github_summary_agent \
-    --repo metal3-io/metal3-dev-env \
-    --repo-path /tmp/metal3-dev-env \
-    --since 2026-10-01 \
-    --until 2026-10-31
-```
-
-Write the memo to a custom directory:
-
-```bash
-.venv/bin/python -m github_summary_agent \
-    --repo metal3-io/metal3-dev-env \
-    --repo-path /tmp/metal3-dev-env \
-    --since "2 weeks ago" \
-    --output-dir output
 ```
 
 ### Options
 
-| Flag           | Required | Description                                               |
-| -------------- | -------- | --------------------------------------------------------- |
-| `--repo`       | yes      | Repository in `owner/name` form.                          |
-| `--repo-path`  | yes      | Path to a local clone of the repository (for git logs).   |
-| `--since`      | yes      | Start of the period, e.g. `"30 days ago"` or `2026-10-01`.|
-| `--until`      | no       | Optional end of the period.                               |
-| `--output-dir` | no       | Directory to write the memo into (default: `output`).     |
+| Flag           | Required            | Description                                                      |
+| -------------- | ------------------- | ---------------------------------------------------------------- |
+| `--config`     | one of config/repo  | Path to a TOML config listing repos and settings.                |
+| `--repo`       | one of config/repo  | Analyse a single repository in `owner/name` form.                |
+| `--since`      | with `--repo`       | Start of the period, e.g. `"30 days ago"`; overrides config.     |
+| `--until`      | no                  | Optional end of the period.                                      |
+| `--work-dir`   | no                  | Directory to clone repos into (default: `output/repos`).         |
+| `--output-dir` | no                  | Directory for memos and reports (default: `output`).             |
+| `--force`      | no                  | Re-run analysis even if the inputs have not changed.             |
 
 ## Running the tests
 

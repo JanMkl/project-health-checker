@@ -19,7 +19,12 @@ Any other shell command is disallowed.
 ### Filesystem Access
 
 - **Write access:** The agent may only write to the `output/` directory.
-- All generated summaries, logs, and artifacts must be placed under `output/`.
+- All generated summaries, memos, reports, state files, and artifacts must be
+  placed under `output/`.
+- Repository clones created for analysis must also live under `output/`. The
+  default working directory is `output/repos/`. If a working directory outside
+  `output/` is configured, that is outside this policy and must be approved
+  explicitly.
 - The agent must not modify files outside of `output/`.
 
 ### Network Access

@@ -1,0 +1,23 @@
+# Example configuration for the GitHub Summary Agent.
+# Copy to repos.toml and edit. Parsed with Python's stdlib tomllib.
+
+# Start of the git-log window. Accepts anything `git log --since` understands,
+# e.g. "90 days ago", "2026-01-01".
+since = "90 days ago"
+
+# Optional end of the window. Omit to go up to now.
+# until = "2026-11-01"
+
+# Where the tool clones repositories. Kept under output/ to comply with the
+# AGENTS.md write policy.
+work_dir = "output/repos"
+
+# Where per-repo memos and the fleet report are written.
+output_dir = "output"
+
+# Repositories to analyse, in "owner/name" form.
+repos = [
+    "metal3-io/metal3-dev-env",
+    "metal3-io/baremetal-operator",
+    "metal3-io/ip-address-manager",
+]
