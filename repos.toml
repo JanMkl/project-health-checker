@@ -1,7 +1,7 @@
 # GitHub Summary Agent configuration (converted from the shell repos.conf).
 # Parsed with Python's stdlib tomllib.
 
-since = "2022-01-01"
+since = "2026-01-01"
 work_dir = "output/repos"
 output_dir = "output"
 
