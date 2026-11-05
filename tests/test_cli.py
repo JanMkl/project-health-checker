@@ -1,68 +1,72 @@
+import os
+import tempfile
 import unittest
 from unittest import mock
 
+from github_summary_agent import __main__ as cli
 from github_summary_agent.__main__ import build_parser, main
-from github_summary_agent.git_log_tool import GitLog
-from github_summary_agent.issues_tool import OpenIssues
 
 
 class ParserTests(unittest.TestCase):
-    def test_requires_repo_repo_path_since(self):
-        parser = build_parser()
+    def test_requires_config_or_repo(self):
+        # argparse itself allows empty; main() enforces the xor via parser.error.
         with self.assertRaises(SystemExit):
-            parser.parse_args([])
+            main([])
 
-    def test_parses_all_args(self):
+    def test_repo_requires_since(self):
+        with self.assertRaises(SystemExit):
+            main(["--repo", "o/r"])
+
+    def test_config_and_repo_are_mutually_exclusive(self):
+        with self.assertRaises(SystemExit):
+            main(["--config", "x.toml", "--repo", "o/r"])
+
+    def test_parses_work_dir_and_force(self):
         parser = build_parser()
-        args = parser.parse_args(
-            [
-                "--repo",
-                "metal3-io/metal3-dev-env",
-                "--repo-path",
-                "/tmp/metal3-dev-env",
-                "--since",
-                "30 days ago",
-                "--until",
-                "2026-11-01",
-                "--output-dir",
-                "out",
-            ]
-        )
-        self.assertEqual(args.repo, "metal3-io/metal3-dev-env")
-        self.assertEqual(args.repo_path, "/tmp/metal3-dev-env")
-        self.assertEqual(args.since, "30 days ago")
-        self.assertEqual(args.until, "2026-11-01")
-        self.assertEqual(args.output_dir, "out")
+        args = parser.parse_args(["--config", "c.toml", "--work-dir", "wd", "--force"])
+        self.assertEqual(args.work_dir, "wd")
+        self.assertTrue(args.force)
 
 
-class MainTests(unittest.TestCase):
-    @mock.patch("github_summary_agent.__main__.summarise_project")
-    def test_main_invokes_pipeline_and_returns_zero(self, mock_summarise):
-        mock_summarise.return_value = mock.Mock(
-            memo_path="output/metal3-io__metal3-dev-env-memo.md",
-            git_log=GitLog(since="30 days ago", until=None, commits=[]),
-            issues=OpenIssues(repo="metal3-io/metal3-dev-env", issues=[]),
+class MainSingleRepoTests(unittest.TestCase):
+    @mock.patch.object(cli, "run_repo")
+    def test_single_repo_invokes_run_repo(self, mock_run_repo):
+        mock_run_repo.return_value = mock.Mock(
+            repo="o/r",
+            assessment=mock.Mock(category="healthy"),
+            memo_path="output/o__r-memo.md",
+            analysed=True,
         )
+        code = main(["--repo", "o/r", "--since", "30 days ago"])
+        self.assertEqual(code, 0)
+        mock_run_repo.assert_called_once()
+        self.assertEqual(mock_run_repo.call_args.args[0], "o/r")
+        self.assertEqual(mock_run_repo.call_args.kwargs["since"], "30 days ago")
 
-        code = main(
-            [
-                "--repo",
-                "metal3-io/metal3-dev-env",
-                "--repo-path",
-                "/tmp/metal3-dev-env",
-                "--since",
-                "30 days ago",
-            ]
+
+class MainFleetTests(unittest.TestCase):
+    @mock.patch.object(cli, "run_fleet")
+    def test_config_invokes_run_fleet(self, mock_run_fleet):
+        mock_run_fleet.return_value = mock.Mock(
+            results=[mock.Mock(analysed=True), mock.Mock(analysed=False)],
+            report_path="output/fleet-report.md",
         )
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "repos.toml")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write('since = "x"\nrepos = ["o/a", "o/b"]\n')
+            code = main(["--config", path])
 
         self.assertEqual(code, 0)
-        mock_summarise.assert_called_once_with(
-            repo="metal3-io/metal3-dev-env",
-            repo_path="/tmp/metal3-dev-env",
-            since="30 days ago",
-            until=None,
-            output_dir="output",
-        )
+        mock_run_fleet.assert_called_once()
+
+    def test_bad_config_returns_exit_code_2(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "repos.toml")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write('since = "x"\n')  # missing repos
+            code = main(["--config", path])
+        self.assertEqual(code, 2)
 
 
 if __name__ == "__main__":

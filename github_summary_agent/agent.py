@@ -1,35 +1,67 @@
 """Agent orchestration for the GitHub summary agent.
 
-Ties the tools together:
-1. Read git logs for a period (git_log_tool).
-2. Read open issues (issues_tool).
-3. Ask kiro-cli to write a management memo (memo).
-4. Write the memo to the ``output/`` directory (the only writable location per
-   AGENTS.md).
+Two entry points:
+
+- :func:`run_repo` handles a single repository: clone/update it into the working
+  directory, fetch its issues and pull requests, decide whether a re-analysis is
+  warranted (based on an input fingerprint), run kiro-cli only when needed, and
+  write the per-repo memo.
+- :func:`run_fleet` runs :func:`run_repo` for every repo in a :class:`Config`
+  and writes a single roll-up report classifying repos by how much management
+  attention they need.
+
+All writes stay under ``output_dir`` (which defaults under ``output/``), in line
+with AGENTS.md.
 """
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import List
 
+from .clone_tool import clone_or_update, repo_slug
+from .config import Config
+from .fleet import RepoOutcome, build_fleet_report
 from .git_log_tool import GitLog, read_git_log
-from .issues_tool import OpenIssues, read_open_issues
+from .health import HealthAssessment, classify_health
+from .issues_tool import IssueCollection, read_issues
 from .memo import generate_memo
+from .pulls_tool import PullRequestCollection, read_pull_requests
+from .state import (
+    compute_fingerprint,
+    load_fingerprint,
+    save_state,
+    state_path,
+)
 
-# The only directory the agent is permitted to write to (AGENTS.md).
+# The only directory tree the agent is permitted to write to (AGENTS.md).
 OUTPUT_DIR = "output"
 
 
 @dataclass(frozen=True)
-class SummaryResult:
-    """Outcome of a summary run."""
+class RepoResult:
+    """Outcome of analysing a single repository."""
 
     repo: str
     git_log: GitLog
-    issues: OpenIssues
+    open_issues: IssueCollection
+    closed_issues: IssueCollection
+    open_pulls: PullRequestCollection
+    closed_pulls: PullRequestCollection
+    assessment: HealthAssessment
     memo_markdown: str
     memo_path: str
+    analysed: bool  # True if kiro-cli ran this time, False if memo was reused
+
+
+@dataclass(frozen=True)
+class FleetResult:
+    """Outcome of a fleet run."""
+
+    results: List[RepoResult]
+    report_markdown: str
+    report_path: str
 
 
 def _slugify(repo: str) -> str:
@@ -48,46 +80,149 @@ def _resolve_output_path(output_dir: str, filename: str) -> str:
     return target
 
 
-def summarise_project(
+def run_repo(
     repo: str,
-    repo_path: str,
     *,
     since: str,
     until: str | None = None,
+    work_dir: str = "output/repos",
     output_dir: str = OUTPUT_DIR,
     token: str | None = None,
-) -> SummaryResult:
-    """Run the full summary pipeline for a single project.
+    force: bool = False,
+) -> RepoResult:
+    """Analyse a single repository end-to-end.
+
+    Clones/updates the repo, gathers git log + issues + pull requests, and
+    writes a per-repo memo. The kiro-cli analysis is skipped (and the existing
+    memo reused) when the input fingerprint matches the stored one, unless
+    ``force`` is set.
 
     Args:
-        repo: Repository in ``owner/name`` form (used for the issues API and
-            output filename).
-        repo_path: Path to the local clone of the repository.
+        repo: Repository in ``owner/name`` form.
         since: Start of the git log period.
         until: Optional end of the git log period.
-        output_dir: Directory to write the memo into. Defaults to ``output``.
-        token: Optional GitHub token for the issues API. When ``None``, the
-            ``GITHUB_AUTH_TOKEN`` environment variable is used if set.
+        work_dir: Directory under which repo clones are stored.
+        output_dir: Directory to write memos and state into.
+        token: Optional GitHub token (falls back to ``GITHUB_AUTH_TOKEN``).
+        force: When True, always re-run the analysis even if unchanged.
 
     Returns:
-        A :class:`SummaryResult` including the written memo path.
+        A :class:`RepoResult`.
     """
+    repo_path = clone_or_update(repo, work_dir)
+
     git_log = read_git_log(repo_path, since=since, until=until)
-    issues = read_open_issues(repo, token=token)
-    memo_markdown = generate_memo(git_log, issues)
+    open_issues = read_issues(repo, state="open", token=token)
+    closed_issues = read_issues(repo, state="closed", token=token)
+    open_pulls = read_pull_requests(repo, state="open", token=token)
+    closed_pulls = read_pull_requests(repo, state="closed", token=token)
+
+    assessment = classify_health(
+        repo, git_log, open_issues, closed_issues, open_pulls, closed_pulls
+    )
 
     os.makedirs(output_dir, exist_ok=True)
-    filename = f"{_slugify(repo)}-memo.md"
-    memo_path = _resolve_output_path(output_dir, filename)
+    slug = _slugify(repo)
+    memo_path = _resolve_output_path(output_dir, f"{slug}-memo.md")
+    st_path = state_path(output_dir, slug)
+
+    fingerprint = compute_fingerprint(
+        git_log, open_issues, closed_issues, open_pulls, closed_pulls
+    )
+    previous = load_fingerprint(st_path)
+
+    # Reuse the existing memo when nothing substantial changed.
+    if (
+        not force
+        and previous is not None
+        and previous.digest() == fingerprint.digest()
+        and os.path.exists(memo_path)
+    ):
+        with open(memo_path, encoding="utf-8") as fh:
+            memo_markdown = fh.read()
+        return RepoResult(
+            repo=repo,
+            git_log=git_log,
+            open_issues=open_issues,
+            closed_issues=closed_issues,
+            open_pulls=open_pulls,
+            closed_pulls=closed_pulls,
+            assessment=assessment,
+            memo_markdown=memo_markdown,
+            memo_path=memo_path,
+            analysed=False,
+        )
+
+    memo_markdown = generate_memo(
+        git_log,
+        open_issues=open_issues,
+        closed_issues=closed_issues,
+        open_pulls=open_pulls,
+        closed_pulls=closed_pulls,
+    )
     with open(memo_path, "w", encoding="utf-8") as fh:
         fh.write(memo_markdown)
         if not memo_markdown.endswith("\n"):
             fh.write("\n")
+    save_state(st_path, fingerprint, memo_path)
 
-    return SummaryResult(
+    return RepoResult(
         repo=repo,
         git_log=git_log,
-        issues=issues,
+        open_issues=open_issues,
+        closed_issues=closed_issues,
+        open_pulls=open_pulls,
+        closed_pulls=closed_pulls,
+        assessment=assessment,
         memo_markdown=memo_markdown,
         memo_path=memo_path,
+        analysed=True,
+    )
+
+
+def run_fleet(config: Config, *, token: str | None = None, force: bool = False) -> FleetResult:
+    """Analyse every repo in ``config`` and write a roll-up report.
+
+    Args:
+        config: Parsed multi-repo configuration.
+        token: Optional GitHub token (falls back to ``GITHUB_AUTH_TOKEN``).
+        force: When True, always re-run analyses even if unchanged.
+
+    Returns:
+        A :class:`FleetResult`.
+    """
+    results: List[RepoResult] = []
+    for repo in config.repos:
+        results.append(
+            run_repo(
+                repo,
+                since=config.since,
+                until=config.until,
+                work_dir=config.work_dir,
+                output_dir=config.output_dir,
+                token=token,
+                force=force,
+            )
+        )
+
+    outcomes = [
+        RepoOutcome(
+            repo=r.repo,
+            assessment=r.assessment,
+            memo_path=r.memo_path,
+            analysed=r.analysed,
+        )
+        for r in results
+    ]
+    report_markdown = build_fleet_report(outcomes, output_dir=config.output_dir)
+
+    os.makedirs(config.output_dir, exist_ok=True)
+    report_path = _resolve_output_path(config.output_dir, "fleet-report.md")
+    with open(report_path, "w", encoding="utf-8") as fh:
+        fh.write(report_markdown)
+
+    return FleetResult(
+        results=results,
+        report_markdown=report_markdown,
+        report_path=report_path,
     )
