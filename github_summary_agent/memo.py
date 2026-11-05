@@ -59,6 +59,15 @@ def generate_memo(
         The memo as a Markdown string.
     """
     prompt = build_prompt(git_log, issues)
-    args = ["kiro-cli", "--prompt", prompt]
+    # kiro-cli takes the prompt as the positional INPUT to the `chat`
+    # subcommand. `--no-interactive` runs it without expecting user input and
+    # `--trust-all-tools` avoids blocking on tool-permission prompts.
+    args = [
+        "kiro-cli",
+        "chat",
+        "--no-interactive",
+        "--trust-all-tools",
+        prompt,
+    ]
     result = run_command(args, timeout=timeout)
     return result.stdout.strip()

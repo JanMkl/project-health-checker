@@ -38,6 +38,10 @@ class MemoTests(unittest.TestCase):
 
         args = mock_run.call_args.args[0]
         self.assertEqual(args[0], "kiro-cli")
+        self.assertEqual(args[1], "chat")
+        self.assertIn("--no-interactive", args)
+        # The prompt is passed as the positional INPUT argument.
+        self.assertTrue(args[-1].startswith("You are a technical program manager"))
         self.assertEqual(memo, "# Memo\n\nAll good.")
 
 
