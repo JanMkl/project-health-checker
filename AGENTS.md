@@ -32,10 +32,12 @@ Any other shell command is disallowed.
 
 ### Allowed Projects
 
-- The list of repositories the agent is permitted to access will be defined here later.
+- The agent may only access the repositories explicitly listed below.
 - Until a project is explicitly listed, the agent has no project access.
 
-<!-- Add allowed project repositories below -->
+Allowed repositories:
+
+- `metal3-io/metal3-dev-env` (https://github.com/metal3-io/metal3-dev-env)
 
 ## Development Rules
 
