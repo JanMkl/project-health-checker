@@ -1,0 +1,17 @@
+[project]
+name = "github-summary-agent"
+version = "0.1.0"
+description = "An agent that summarises GitHub project activity into a management memo."
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["github_summary_agent*"]

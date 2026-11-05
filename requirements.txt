@@ -1,0 +1,7 @@
+# Runtime dependencies
+# The agent itself relies only on the Python standard library and the
+# kiro-cli, git, and curl shell commands (see AGENTS.md). No runtime
+# packages are required.
+
+# Development / testing dependencies
+pytest==8.3.3
