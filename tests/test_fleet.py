@@ -59,6 +59,25 @@ class FleetReportTests(unittest.TestCase):
         report = build_fleet_report(outcomes, output_dir="output")
         self.assertIn("_None._", report)
 
+    def test_failed_repo_rendered_without_memo_link(self):
+        from github_summary_agent.fleet import RepoOutcome
+        from github_summary_agent.health import FAILED, HealthAssessment
+
+        outcomes = [
+            RepoOutcome(
+                repo="o/bad",
+                assessment=HealthAssessment("o/bad", FAILED, "Analysis failed: 404"),
+                memo_path="",
+                analysed=False,
+            )
+        ]
+        report = build_fleet_report(outcomes, output_dir="output")
+        self.assertIn("Failed to analyse (1)", report)
+        self.assertIn("o/bad", report)
+        self.assertIn("1 failed to analyse", report)
+        # No broken memo link for a failed repo.
+        self.assertNotIn("[memo]", report)
+
 
 if __name__ == "__main__":
     unittest.main()

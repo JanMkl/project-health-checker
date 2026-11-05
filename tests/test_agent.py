@@ -178,6 +178,35 @@ class RunFleetTests(unittest.TestCase):
             self.assertTrue(os.path.exists(fleet.report_path))
             self.assertEqual(os.path.basename(fleet.report_path), "fleet-report.md")
 
+    def test_one_failing_repo_does_not_abort_fleet(self):
+        with tempfile.TemporaryDirectory() as d:
+            good = mock.Mock(
+                repo="o/good",
+                assessment=mock.Mock(category="healthy"),
+                memo_path=os.path.join(d, "o__good-memo.md"),
+                analysed=True,
+            )
+
+            def side_effect(repo, **kwargs):
+                if repo == "o/bad":
+                    raise RuntimeError("GitHub API error for o/bad: Not Found")
+                return good
+
+            config = Config(
+                repos=["o/bad", "o/good"],
+                since="x",
+                work_dir=os.path.join(d, "repos"),
+                output_dir=d,
+            )
+            with mock.patch.object(agent, "run_repo", side_effect=side_effect):
+                fleet = run_fleet(config)
+
+            # The good repo still produced a result and the report was written.
+            self.assertEqual(len(fleet.results), 1)
+            self.assertTrue(os.path.exists(fleet.report_path))
+            self.assertIn("Failed to analyse", fleet.report_markdown)
+            self.assertIn("o/bad", fleet.report_markdown)
+
 
 if __name__ == "__main__":
     unittest.main()

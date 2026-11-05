@@ -25,6 +25,9 @@ from .pulls_tool import PullRequestCollection
 HEALTHY = "healthy"
 ATTENTION = "attention"
 INVESTIGATE = "investigate"
+# Analysis could not be completed for this repo (e.g. repo not found, API or
+# clone error). Surfaced separately so a single bad repo does not abort a fleet.
+FAILED = "failed"
 
 
 @dataclass(frozen=True)

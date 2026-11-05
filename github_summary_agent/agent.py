@@ -24,7 +24,7 @@ from .clone_tool import clone_or_update, repo_slug
 from .config import Config
 from .fleet import RepoOutcome, build_fleet_report
 from .git_log_tool import GitLog, read_git_log
-from .health import HealthAssessment, classify_health
+from .health import FAILED, HealthAssessment, classify_health
 from .issues_tool import IssueCollection, read_issues
 from .memo import generate_memo
 from .pulls_tool import PullRequestCollection, read_pull_requests
@@ -192,9 +192,10 @@ def run_fleet(config: Config, *, token: str | None = None, force: bool = False) 
         A :class:`FleetResult`.
     """
     results: List[RepoResult] = []
+    outcomes: List[RepoOutcome] = []
     for repo in config.repos:
-        results.append(
-            run_repo(
+        try:
+            result = run_repo(
                 repo,
                 since=config.since,
                 until=config.until,
@@ -203,17 +204,30 @@ def run_fleet(config: Config, *, token: str | None = None, force: bool = False) 
                 token=token,
                 force=force,
             )
+        except Exception as exc:  # noqa: BLE001 - one bad repo must not abort the fleet
+            # Record the failure and continue with the remaining repos.
+            outcomes.append(
+                RepoOutcome(
+                    repo=repo,
+                    assessment=HealthAssessment(
+                        repo, FAILED, f"Analysis failed: {exc}"
+                    ),
+                    memo_path="",
+                    analysed=False,
+                )
+            )
+            continue
+
+        results.append(result)
+        outcomes.append(
+            RepoOutcome(
+                repo=result.repo,
+                assessment=result.assessment,
+                memo_path=result.memo_path,
+                analysed=result.analysed,
+            )
         )
 
-    outcomes = [
-        RepoOutcome(
-            repo=r.repo,
-            assessment=r.assessment,
-            memo_path=r.memo_path,
-            analysed=r.analysed,
-        )
-        for r in results
-    ]
     report_markdown = build_fleet_report(outcomes, output_dir=config.output_dir)
 
     os.makedirs(config.output_dir, exist_ok=True)
