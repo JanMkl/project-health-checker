@@ -38,6 +38,7 @@ def run_command(
     cwd: str | None = None,
     timeout: float | None = None,
     check: bool = True,
+    stdin_input: str | None = None,
 ) -> CommandResult:
     """Run an allow-listed shell command and capture its output.
 
@@ -48,6 +49,9 @@ def run_command(
         timeout: Optional timeout in seconds.
         check: When True, raise ``subprocess.CalledProcessError`` on non-zero
             exit.
+        stdin_input: Optional text fed to the command's standard input. Use this
+            for large payloads that would exceed the OS argument-length limit if
+            passed as a command-line argument.
 
     Raises:
         CommandNotAllowedError: If the command is not allow-listed.
@@ -69,6 +73,7 @@ def run_command(
         timeout=timeout,
         capture_output=True,
         text=True,
+        input=stdin_input,
     )
 
     result = CommandResult(

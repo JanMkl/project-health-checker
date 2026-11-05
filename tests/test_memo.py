@@ -80,7 +80,10 @@ class MemoTests(unittest.TestCase):
         self.assertEqual(args[0], "kiro-cli")
         self.assertEqual(args[1], "chat")
         self.assertIn("--no-interactive", args)
-        self.assertTrue(args[-1].startswith("You are a technical program manager"))
+        # The prompt is fed on stdin (not argv) to avoid ARG_MAX limits.
+        self.assertFalse(any("technical program manager" in a for a in args))
+        stdin_input = mock_run.call_args.kwargs["stdin_input"]
+        self.assertTrue(stdin_input.startswith("You are a technical program manager"))
         self.assertEqual(memo, "# Memo\n\nAll good.")
 
 

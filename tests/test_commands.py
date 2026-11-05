@@ -48,6 +48,14 @@ class RunCommandTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.returncode, 22)
 
+    @mock.patch("github_summary_agent.commands.subprocess.run")
+    def test_stdin_input_passed_to_subprocess(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=["kiro-cli", "chat"], returncode=0, stdout="ok", stderr=""
+        )
+        run_command(["kiro-cli", "chat"], stdin_input="a big prompt")
+        self.assertEqual(mock_run.call_args.kwargs["input"], "a big prompt")
+
 
 if __name__ == "__main__":
     unittest.main()

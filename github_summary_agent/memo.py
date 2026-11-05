@@ -95,15 +95,17 @@ def generate_memo(
         open_pulls=open_pulls,
         closed_pulls=closed_pulls,
     )
-    # kiro-cli takes the prompt as the positional INPUT to the `chat`
-    # subcommand. `--no-interactive` runs it without expecting user input and
+    # Feed the prompt on stdin rather than as a command-line argument. Prompts
+    # for large repositories can exceed the OS argument-length limit (ARG_MAX),
+    # which raises "OSError: [Errno 7] Argument list too long". `kiro-cli chat`
+    # reads the prompt from stdin when no positional INPUT is given.
+    # `--no-interactive` runs without expecting further input and
     # `--trust-all-tools` avoids blocking on tool-permission prompts.
     args = [
         "kiro-cli",
         "chat",
         "--no-interactive",
         "--trust-all-tools",
-        prompt,
     ]
-    result = run_command(args, timeout=timeout)
+    result = run_command(args, timeout=timeout, stdin_input=prompt)
     return result.stdout.strip()
