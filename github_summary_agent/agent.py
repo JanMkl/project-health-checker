@@ -55,6 +55,7 @@ def summarise_project(
     since: str,
     until: str | None = None,
     output_dir: str = OUTPUT_DIR,
+    token: str | None = None,
 ) -> SummaryResult:
     """Run the full summary pipeline for a single project.
 
@@ -65,12 +66,14 @@ def summarise_project(
         since: Start of the git log period.
         until: Optional end of the git log period.
         output_dir: Directory to write the memo into. Defaults to ``output``.
+        token: Optional GitHub token for the issues API. When ``None``, the
+            ``GITHUB_AUTH_TOKEN`` environment variable is used if set.
 
     Returns:
         A :class:`SummaryResult` including the written memo path.
     """
     git_log = read_git_log(repo_path, since=since, until=until)
-    issues = read_open_issues(repo)
+    issues = read_open_issues(repo, token=token)
     memo_markdown = generate_memo(git_log, issues)
 
     os.makedirs(output_dir, exist_ok=True)

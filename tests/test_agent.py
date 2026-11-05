@@ -50,7 +50,7 @@ class SummariseProjectTests(unittest.TestCase):
             self.assertEqual(written, "# Memo\n\nContent.\n")
             self.assertEqual(result.repo, "octocat/Hello-World")
             mock_log.assert_called_once()
-            mock_issues.assert_called_once_with("octocat/Hello-World")
+            mock_issues.assert_called_once_with("octocat/Hello-World", token=None)
             mock_memo.assert_called_once()
 
 
