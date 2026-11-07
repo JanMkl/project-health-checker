@@ -34,6 +34,17 @@ class ParserTests(unittest.TestCase):
         default = parser.parse_args(["--config", "c.toml"])
         self.assertFalse(default.pptx)
 
+    def test_parses_backend_choice(self):
+        parser = build_parser()
+        args = parser.parse_args(["--config", "c.toml", "--backend", "codex"])
+        self.assertEqual(args.backend, "codex")
+        # Default is None so config can supply its own value.
+        self.assertIsNone(parser.parse_args(["--config", "c.toml"]).backend)
+
+    def test_rejects_unknown_backend(self):
+        with self.assertRaises(SystemExit):
+            build_parser().parse_args(["--config", "c.toml", "--backend", "gemini"])
+
 
 class MainSingleRepoTests(unittest.TestCase):
     @mock.patch.object(cli, "run_repo")
@@ -49,6 +60,20 @@ class MainSingleRepoTests(unittest.TestCase):
         mock_run_repo.assert_called_once()
         self.assertEqual(mock_run_repo.call_args.args[0], "o/r")
         self.assertEqual(mock_run_repo.call_args.kwargs["since"], "30 days ago")
+        # Defaults to kiro-cli when --backend is not given.
+        self.assertEqual(mock_run_repo.call_args.kwargs["backend"], "kiro-cli")
+
+    @mock.patch.object(cli, "run_repo")
+    def test_single_repo_backend_override(self, mock_run_repo):
+        mock_run_repo.return_value = mock.Mock(
+            repo="o/r",
+            assessment=mock.Mock(category="healthy"),
+            memo_path="output/o__r-memo.md",
+            analysed=True,
+        )
+        code = main(["--repo", "o/r", "--since", "x", "--backend", "cursor-agent"])
+        self.assertEqual(code, 0)
+        self.assertEqual(mock_run_repo.call_args.kwargs["backend"], "cursor-agent")
 
     @mock.patch.object(cli, "run_fleet")
     @mock.patch.object(cli, "run_repo")
@@ -102,6 +127,38 @@ class MainFleetTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertTrue(mock_run_fleet.call_args.kwargs["pptx"])
+
+    @mock.patch.object(cli, "run_fleet")
+    def test_backend_flag_overrides_config(self, mock_run_fleet):
+        mock_run_fleet.return_value = mock.Mock(
+            results=[mock.Mock(analysed=True)],
+            report_path="output/fleet-report.md",
+            pptx_path=None,
+        )
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "repos.toml")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write('since = "x"\nbackend = "codex"\nrepos = ["o/a"]\n')
+            # CLI --backend should win over the config's "codex".
+            code = main(["--config", path, "--backend", "cursor-agent"])
+        self.assertEqual(code, 0)
+        config_arg = mock_run_fleet.call_args.args[0]
+        self.assertEqual(config_arg.backend, "cursor-agent")
+
+    @mock.patch.object(cli, "run_fleet")
+    def test_backend_from_config_used_when_flag_absent(self, mock_run_fleet):
+        mock_run_fleet.return_value = mock.Mock(
+            results=[mock.Mock(analysed=True)],
+            report_path="output/fleet-report.md",
+            pptx_path=None,
+        )
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "repos.toml")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write('since = "x"\nbackend = "codex"\nrepos = ["o/a"]\n')
+            code = main(["--config", path])
+        self.assertEqual(code, 0)
+        self.assertEqual(mock_run_fleet.call_args.args[0].backend, "codex")
 
     @mock.patch.object(cli, "run_fleet", side_effect=RuntimeError("pptx missing"))
     def test_run_fleet_error_returns_exit_code_1(self, _mock_run_fleet):

@@ -13,6 +13,16 @@ class ParseConfigTests(unittest.TestCase):
         self.assertIsNone(cfg.until)
         self.assertEqual(cfg.work_dir, "output/repos")
         self.assertEqual(cfg.output_dir, "output")
+        # Backend defaults to kiro-cli when unspecified.
+        self.assertEqual(cfg.backend, "kiro-cli")
+
+    def test_backend_from_config(self):
+        cfg = parse_config('since = "x"\nbackend = "codex"\nrepos = ["o/a"]\n')
+        self.assertEqual(cfg.backend, "codex")
+
+    def test_unknown_backend_raises(self):
+        with self.assertRaises(ConfigError):
+            parse_config('since = "x"\nbackend = "gemini"\nrepos = ["o/a"]\n')
 
     def test_all_fields(self):
         cfg = parse_config(

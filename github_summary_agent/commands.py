@@ -11,8 +11,12 @@ import subprocess
 from dataclasses import dataclass
 from typing import Sequence
 
-# Shell commands permitted by AGENTS.md.
-ALLOWED_COMMANDS = frozenset({"kiro-cli", "git", "curl"})
+from .backends import BACKEND_COMMANDS
+
+# Shell commands permitted by AGENTS.md. The AI-CLI backends (kiro-cli, codex,
+# cursor-agent) are contributed by ``backends.BACKEND_COMMANDS`` so the memo
+# tool and the allow-list cannot drift apart.
+ALLOWED_COMMANDS = frozenset({"git", "curl"}) | BACKEND_COMMANDS
 
 
 class CommandNotAllowedError(Exception):

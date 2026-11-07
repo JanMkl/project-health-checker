@@ -18,6 +18,7 @@ import sys
 from typing import Sequence
 
 from .agent import OUTPUT_DIR, run_fleet, run_repo
+from .backends import DEFAULT_BACKEND, SUPPORTED_BACKENDS
 from .config import DEFAULT_WORK_DIR, Config, ConfigError, load_config
 
 
@@ -69,6 +70,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Directory to write memos and reports into (default: {OUTPUT_DIR}).",
     )
     parser.add_argument(
+        "--backend",
+        default=None,
+        choices=SUPPORTED_BACKENDS,
+        help=(
+            "AI CLI used to write the memos: "
+            f"{', '.join(SUPPORTED_BACKENDS)} (default: {DEFAULT_BACKEND}). "
+            "Overrides the 'backend' value in the config when given."
+        ),
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="Re-run the analysis even if the inputs have not changed.",
@@ -112,6 +123,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             until=args.until,
             work_dir=args.work_dir,
             output_dir=args.output_dir,
+            backend=args.backend or DEFAULT_BACKEND,
         )
     else:
         try:
@@ -126,6 +138,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             until=args.until if args.until is not None else config.until,
             work_dir=args.work_dir if args.work_dir != DEFAULT_WORK_DIR else config.work_dir,
             output_dir=args.output_dir if args.output_dir != OUTPUT_DIR else config.output_dir,
+            backend=args.backend or config.backend,
         )
 
     # The single-repo shortcut avoids writing a fleet report, but when a deck is
@@ -139,6 +152,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             work_dir=config.work_dir,
             output_dir=config.output_dir,
             force=args.force,
+            backend=config.backend,
         )
         status = "analysed" if result.analysed else "reused existing memo"
         print(f"{result.repo}: {result.assessment.category} ({status})")

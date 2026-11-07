@@ -10,6 +10,7 @@ replacement for the shell-oriented ``repos.conf``. Example:
     until = "2026-11-01"        # optional
     work_dir = "output/repos"   # where clones are kept (optional)
     output_dir = "output"       # where reports are written (optional)
+    backend = "kiro-cli"        # AI CLI: kiro-cli | codex | cursor-agent (optional)
     repos = [
         "metal3-io/metal3-dev-env",
         "metal3-io/baremetal-operator",
@@ -21,6 +22,8 @@ from __future__ import annotations
 import tomllib
 from dataclasses import dataclass, field
 from typing import List
+
+from .backends import DEFAULT_BACKEND, SUPPORTED_BACKENDS
 
 # Defaults chosen to stay within the AGENTS.md write policy (everything under
 # ``output/``).
@@ -41,6 +44,7 @@ class Config:
     until: str | None = None
     work_dir: str = DEFAULT_WORK_DIR
     output_dir: str = DEFAULT_OUTPUT_DIR
+    backend: str = DEFAULT_BACKEND
 
 
 def _validate_repo(repo: object) -> str:
@@ -81,12 +85,19 @@ def parse_config(raw: str) -> Config:
     if not isinstance(work_dir, str) or not isinstance(output_dir, str):
         raise ConfigError("'work_dir' and 'output_dir' must be strings.")
 
+    backend = data.get("backend", DEFAULT_BACKEND)
+    if not isinstance(backend, str) or backend not in SUPPORTED_BACKENDS:
+        raise ConfigError(
+            f"'backend' must be one of {', '.join(SUPPORTED_BACKENDS)}."
+        )
+
     return Config(
         repos=repos,
         since=since,
         until=until,
         work_dir=work_dir,
         output_dir=output_dir,
+        backend=backend,
     )
 
 

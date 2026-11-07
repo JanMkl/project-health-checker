@@ -15,6 +15,10 @@ work_dir = "output/repos"
 # Where per-repo memos and the fleet report are written.
 output_dir = "output"
 
+# AI coding CLI used to write the memos. One of: "kiro-cli" (default),
+# "codex", or "cursor-agent". Only the selected tool needs to be on your PATH.
+backend = "kiro-cli"
+
 # Repositories to analyse, in "owner/name" form.
 repos = [
     "metal3-io/metal3-dev-env",

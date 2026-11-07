@@ -20,6 +20,7 @@ import os
 from dataclasses import dataclass
 from typing import List
 
+from .backends import DEFAULT_BACKEND
 from .clone_tool import clone_or_update, repo_slug
 from .config import Config
 from .fleet import RepoOutcome, build_fleet_report
@@ -91,11 +92,12 @@ def run_repo(
     output_dir: str = OUTPUT_DIR,
     token: str | None = None,
     force: bool = False,
+    backend: str = DEFAULT_BACKEND,
 ) -> RepoResult:
     """Analyse a single repository end-to-end.
 
     Clones/updates the repo, gathers git log + issues + pull requests, and
-    writes a per-repo memo. The kiro-cli analysis is skipped (and the existing
+    writes a per-repo memo. The AI-CLI analysis is skipped (and the existing
     memo reused) when the input fingerprint matches the stored one, unless
     ``force`` is set.
 
@@ -107,6 +109,8 @@ def run_repo(
         output_dir: Directory to write memos and state into.
         token: Optional GitHub token (falls back to ``GITHUB_AUTH_TOKEN``).
         force: When True, always re-run the analysis even if unchanged.
+        backend: Which AI CLI to use for memo generation (``kiro-cli``,
+            ``codex``, or ``cursor-agent``).
 
     Returns:
         A :class:`RepoResult`.
@@ -161,6 +165,7 @@ def run_repo(
         closed_issues=closed_issues,
         open_pulls=open_pulls,
         closed_pulls=closed_pulls,
+        backend=backend,
     )
     with open(memo_path, "w", encoding="utf-8") as fh:
         fh.write(memo_markdown)
@@ -213,6 +218,7 @@ def run_fleet(
                 output_dir=config.output_dir,
                 token=token,
                 force=force,
+                backend=config.backend,
             )
         except Exception as exc:  # noqa: BLE001 - one bad repo must not abort the fleet
             # Record the failure and continue with the remaining repos.

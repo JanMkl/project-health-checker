@@ -1,9 +1,11 @@
 # GitHub Summary Agent
 
 An agent that analyses one or many GitHub projects' git activity, issues, and
-pull requests, asks `kiro-cli` to write a per-project management memo (in
+pull requests, asks an AI coding CLI to write a per-project management memo (in
 Markdown), and rolls everything up into a single fleet report grouping projects
-by how much management attention they need.
+by how much management attention they need. The memo CLI is pluggable —
+`kiro-cli` (default), `codex`, or `cursor-agent` — selected with `--backend` or
+the `backend` config key.
 
 The access policy for the agent is defined in [AGENTS.md](AGENTS.md).
 
@@ -22,7 +24,8 @@ For each repository, orchestrated by `run_repo`:
 5. **Health classification** (`health.py`) — deterministically sorts the repo
    into `healthy`, `attention`, or `investigate` from the collected counts.
 6. **Memo generation** (`memo.py`) — builds a prompt from the commits, issues,
-   and pull requests and pipes it to `kiro-cli` for the Markdown memo.
+   and pull requests and pipes it to the selected AI CLI backend
+   (`backends.py`) for the Markdown memo.
 
 Across all repos, `run_fleet` writes `output/fleet-report.md` grouping projects
 into: requires management attention, needs investigation / keep an eye on, and
@@ -36,10 +39,10 @@ Shared GitHub API plumbing (auth, redirects, error handling) lives in
 
 ### Skipping unchanged analyses
 
-Re-running kiro-cli for every repo is expensive. After each analysis the agent
+Re-running the AI CLI for every repo is expensive. After each analysis the agent
 stores an input *fingerprint* (commit count and latest commit, plus open/closed
 issue and PR counts and newest timestamps) next to the memo. On a later run, if
-the fingerprint is unchanged the existing memo is reused and kiro-cli is not
+the fingerprint is unchanged the existing memo is reused and the AI CLI is not
 called again. Use `--force` to re-analyse regardless.
 
 All memos, reports, state files, and repository clones are written under the
@@ -49,7 +52,9 @@ to.
 ## Requirements
 
 - Python 3.10+
-- `git`, `curl`, and `kiro-cli` available on your `PATH`
+- `git` and `curl` available on your `PATH`
+- One AI coding CLI on your `PATH`, matching the backend you select:
+  `kiro-cli` (default), `codex`, or `cursor-agent`
   (these are the only shell commands the agent is allowed to run)
 
 ## Setup
@@ -118,8 +123,35 @@ This clones each repo under `output/repos/`, writes one memo per repo
 | `--until`      | no                  | Optional end of the period.                                      |
 | `--work-dir`   | no                  | Directory to clone repos into (default: `output/repos`).         |
 | `--output-dir` | no                  | Directory for memos and reports (default: `output`).             |
+| `--backend`    | no                  | AI CLI to write memos: `kiro-cli` (default), `codex`, or `cursor-agent`; overrides config. |
 | `--force`      | no                  | Re-run analysis even if the inputs have not changed.             |
 | `--pptx`       | no                  | Also write a PowerPoint deck of the findings (see below).        |
+
+## Choosing an AI CLI backend
+
+The memos are written by an AI coding CLI. Pick whichever you have installed:
+
+| Backend        | Executable      | Invocation (non-interactive)              |
+| -------------- | --------------- | ----------------------------------------- |
+| `kiro-cli`     | `kiro-cli`      | `kiro-cli chat --no-interactive --trust-all-tools` |
+| `codex`        | `codex`         | `codex exec`                              |
+| `cursor-agent` | `cursor-agent`  | `cursor-agent --print --output-format text` |
+
+In every case the prompt is fed on stdin (so large repositories don't hit the
+OS argument-length limit) and the memo is read from stdout. Select a backend per
+run with `--backend`, or set a default in the config:
+
+```toml
+# repos.toml
+backend = "codex"
+```
+
+```bash
+.venv/bin/python -m github_summary_agent --config repos.toml --backend cursor-agent
+```
+
+Only the executable for the selected backend needs to be on your `PATH`; the
+other backends are not required.
 
 ## PowerPoint export
 
@@ -131,7 +163,7 @@ the Markdown memos and fleet report. The deck has:
   Health and contributors are derived deterministically from the collected git
   log, issues, and pull requests (bot/automation accounts are excluded from the
   contributor ranking). Project direction is a single sentence taken from the
-  memo: the memo prompt asks kiro-cli to end its "Direction" section with an
+  memo: the memo prompt asks the AI CLI to end its "Direction" section with an
   explicit `**Direction summary:**` one-liner, which the slide uses verbatim
   (older memos without the marker fall back to a heuristic summary). Below the
   visuals, the slide shows a focused recap of the project state — the executive

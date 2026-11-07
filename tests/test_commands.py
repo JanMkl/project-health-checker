@@ -11,7 +11,11 @@ from github_summary_agent.commands import (
 
 class RunCommandTests(unittest.TestCase):
     def test_allow_list_contains_expected_commands(self):
-        self.assertEqual(ALLOWED_COMMANDS, {"kiro-cli", "git", "curl"})
+        # git and curl plus the AI-CLI backends contributed by backends.py.
+        self.assertEqual(
+            ALLOWED_COMMANDS,
+            {"git", "curl", "kiro-cli", "codex", "cursor-agent"},
+        )
 
     def test_rejects_command_not_in_allow_list(self):
         with self.assertRaises(CommandNotAllowedError):

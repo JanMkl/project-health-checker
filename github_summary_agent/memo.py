@@ -1,12 +1,14 @@
-"""Generate a management memo via kiro-cli.
+"""Generate a management memo via a pluggable AI-CLI backend.
 
 Builds a prompt from the git log, issues (open + closed), and pull requests
-(open + closed), then asks ``kiro-cli`` to write a markdown management memo
-analysing project direction, active contributors, and project health.
+(open + closed), then asks an AI coding CLI (``kiro-cli`` by default, or
+``codex`` / ``cursor-agent``) to write a markdown management memo analysing
+project direction, active contributors, and project health.
 """
 
 from __future__ import annotations
 
+from .backends import DEFAULT_BACKEND, get_backend
 from .commands import run_command
 from .git_log_tool import GitLog
 from .issues_tool import IssueCollection
@@ -92,9 +94,10 @@ def generate_memo(
     closed_issues: IssueCollection,
     open_pulls: PullRequestCollection,
     closed_pulls: PullRequestCollection,
+    backend: str = DEFAULT_BACKEND,
     timeout: float | None = 300,
 ) -> str:
-    """Ask kiro-cli to produce a markdown management memo.
+    """Ask an AI-CLI backend to produce a markdown management memo.
 
     Args:
         git_log: Collected git log for the period.
@@ -102,10 +105,15 @@ def generate_memo(
         closed_issues: Closed issues.
         open_pulls: Open pull requests.
         closed_pulls: Closed pull requests.
+        backend: Which AI CLI to invoke (``kiro-cli``, ``codex``, or
+            ``cursor-agent``).
         timeout: Optional command timeout in seconds.
 
     Returns:
         The memo as a Markdown string.
+
+    Raises:
+        UnknownBackendError: If ``backend`` is not supported.
     """
     prompt = build_prompt(
         git_log,
@@ -116,15 +124,8 @@ def generate_memo(
     )
     # Feed the prompt on stdin rather than as a command-line argument. Prompts
     # for large repositories can exceed the OS argument-length limit (ARG_MAX),
-    # which raises "OSError: [Errno 7] Argument list too long". `kiro-cli chat`
-    # reads the prompt from stdin when no positional INPUT is given.
-    # `--no-interactive` runs without expecting further input and
-    # `--trust-all-tools` avoids blocking on tool-permission prompts.
-    args = [
-        "kiro-cli",
-        "chat",
-        "--no-interactive",
-        "--trust-all-tools",
-    ]
+    # which raises "OSError: [Errno 7] Argument list too long". Every supported
+    # backend reads its prompt from stdin in non-interactive mode.
+    args = get_backend(backend).build_args()
     result = run_command(args, timeout=timeout, stdin_input=prompt)
     return result.stdout.strip()

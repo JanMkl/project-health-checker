@@ -68,7 +68,7 @@ class MemoTests(unittest.TestCase):
         self.assertIn("**Direction summary:**", prompt)
 
     @mock.patch("github_summary_agent.memo.run_command")
-    def test_generate_memo_calls_kiro_cli(self, mock_run):
+    def test_generate_memo_defaults_to_kiro_cli(self, mock_run):
         mock_run.return_value = CommandResult(0, "# Memo\n\nAll good.\n", "")
         open_issues, closed_issues, open_pulls, closed_pulls = _sample_activity()
         memo = generate_memo(
@@ -88,6 +88,53 @@ class MemoTests(unittest.TestCase):
         stdin_input = mock_run.call_args.kwargs["stdin_input"]
         self.assertTrue(stdin_input.startswith("You are a technical program manager"))
         self.assertEqual(memo, "# Memo\n\nAll good.")
+
+    @mock.patch("github_summary_agent.memo.run_command")
+    def test_generate_memo_uses_codex_backend(self, mock_run):
+        mock_run.return_value = CommandResult(0, "# Memo\n", "")
+        open_issues, closed_issues, open_pulls, closed_pulls = _sample_activity()
+        generate_memo(
+            _sample_log(),
+            open_issues=open_issues,
+            closed_issues=closed_issues,
+            open_pulls=open_pulls,
+            closed_pulls=closed_pulls,
+            backend="codex",
+        )
+        args = mock_run.call_args.args[0]
+        self.assertEqual(args[0], "codex")
+        self.assertIn("exec", args)
+        # Prompt still fed on stdin.
+        self.assertIsNotNone(mock_run.call_args.kwargs["stdin_input"])
+
+    @mock.patch("github_summary_agent.memo.run_command")
+    def test_generate_memo_uses_cursor_backend(self, mock_run):
+        mock_run.return_value = CommandResult(0, "# Memo\n", "")
+        open_issues, closed_issues, open_pulls, closed_pulls = _sample_activity()
+        generate_memo(
+            _sample_log(),
+            open_issues=open_issues,
+            closed_issues=closed_issues,
+            open_pulls=open_pulls,
+            closed_pulls=closed_pulls,
+            backend="cursor-agent",
+        )
+        args = mock_run.call_args.args[0]
+        self.assertEqual(args[0], "cursor-agent")
+
+    def test_generate_memo_rejects_unknown_backend(self):
+        from github_summary_agent.backends import UnknownBackendError
+
+        open_issues, closed_issues, open_pulls, closed_pulls = _sample_activity()
+        with self.assertRaises(UnknownBackendError):
+            generate_memo(
+                _sample_log(),
+                open_issues=open_issues,
+                closed_issues=closed_issues,
+                open_pulls=open_pulls,
+                closed_pulls=closed_pulls,
+                backend="nope",
+            )
 
 
 if __name__ == "__main__":
