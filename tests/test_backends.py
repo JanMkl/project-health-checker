@@ -49,6 +49,9 @@ class BackendsTests(unittest.TestCase):
         argv = get_backend(CURSOR).argv
         self.assertEqual(argv[0], "cursor-agent")
         self.assertIn("--print", argv)
+        self.assertIn("--output-format", argv)
+        # --trust clears the non-interactive workspace-trust prompt.
+        self.assertIn("--trust", argv)
 
     def test_unknown_backend_raises(self):
         with self.assertRaises(UnknownBackendError):
@@ -103,7 +106,7 @@ class CursorExecutableResolutionTests(unittest.TestCase):
         argv = self._run_with_which({"agent"})
         self.assertEqual(argv[0], "agent")
         # The rest of the invocation is unchanged.
-        self.assertEqual(argv[1:], ["--print", "--output-format", "text"])
+        self.assertEqual(argv[1:], ["--print", "--output-format", "text", "--trust"])
 
     def test_falls_back_to_primary_name_when_none_found(self):
         # Neither is installed: use the primary name so the error names it.

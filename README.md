@@ -135,7 +135,7 @@ The memos are written by an AI coding CLI. Pick whichever you have installed:
 | -------------- | --------------------------- | ----------------------------------------- |
 | `kiro-cli`     | `kiro-cli`                  | `kiro-cli chat --no-interactive --trust-all-tools` |
 | `codex`        | `codex`                     | `codex exec`                              |
-| `cursor-agent` | `cursor-agent` or `agent`   | `cursor-agent --print --output-format text` |
+| `cursor-agent` | `cursor-agent` or `agent`   | `cursor-agent --print --output-format text --trust` |
 
 The prompt is always fed on stdin (so large repositories don't hit the OS
 argument-length limit). `kiro-cli` and `cursor-agent` print the memo to stdout;

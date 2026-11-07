@@ -130,9 +130,13 @@ def _run_codex(argv: List[str], prompt: str, runner: Callable, timeout) -> str:
 #   0.167.0: "If not provided as an argument (or if `-` is used), instructions
 #   are read from stdin").
 # - `cursor-agent --print` runs non-interactively; `--output-format text` keeps
-#   stdout to plain text. The prompt is read from stdin. Cursor installs the
-#   tool under two names (`cursor-agent` and the bare `agent`), so both are
-#   accepted; whichever is on PATH is used.
+#   stdout to plain text; the prompt is read from stdin. `--trust` clears the
+#   one-time "Workspace Trust Required" prompt that otherwise blocks a
+#   non-interactive run (verified against the Cursor CLI 2026.11.05). `--trust`
+#   is deliberately used instead of `--force`/`--yolo`: the memo task only needs
+#   to read the piped prompt, not broad command-execution permission. Cursor
+#   installs the tool under two names (`cursor-agent` and the bare `agent`), so
+#   both are accepted; whichever is on PATH is used.
 _BACKENDS: Dict[str, Backend] = {
     KIRO: Backend(
         KIRO, ["kiro-cli", "chat", "--no-interactive", "--trust-all-tools"], _run_stdout
@@ -140,7 +144,7 @@ _BACKENDS: Dict[str, Backend] = {
     CODEX: Backend(CODEX, ["codex", "exec", "-"], _run_codex),
     CURSOR: Backend(
         CURSOR,
-        ["cursor-agent", "--print", "--output-format", "text"],
+        ["cursor-agent", "--print", "--output-format", "text", "--trust"],
         _run_stdout,
         executables=("cursor-agent", "agent"),
     ),
