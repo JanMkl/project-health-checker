@@ -153,6 +153,32 @@ backend = "codex"
 Only the executable for the selected backend needs to be on your `PATH`; the
 other backends are not required.
 
+### Authenticate the backend first
+
+The agent runs the AI CLI non-interactively, so **you must sign in once before
+running the agent**. Each tool caches the credentials in your user environment
+and reuses them on later runs, so this is a one-time step per machine (until you
+log out or the session expires). Log in with the tool you selected:
+
+| Backend        | Log in            | Check status           | Log out            |
+| -------------- | ----------------- | ---------------------- | ------------------ |
+| `kiro-cli`     | `kiro-cli login`  | `kiro-cli whoami`      | `kiro-cli logout`  |
+| `codex`        | `codex login`     | `codex login status`   | `codex logout`     |
+| `cursor-agent` | `cursor-agent login` | `cursor-agent status` | `cursor-agent logout` |
+
+For non-interactive or headless environments (CI, remote servers without a
+browser), the usage-based tools also accept an API key from the environment
+instead of a browser login:
+
+- **codex** — sign in with an API key, or export `OPENAI_API_KEY`. For a remote
+  host without a browser, use `codex login --device-auth`. Credentials are
+  cached in `~/.codex/auth.json`.
+- **cursor-agent** — export `CURSOR_API_KEY` (or pass `--api-key`). The browser
+  login flow can be suppressed with `NO_OPEN_BROWSER=1`.
+
+kiro-cli's `kiro-cli login` supports a device-code flow (`--use-device-flow`)
+for the same purpose.
+
 ## PowerPoint export
 
 Passing `--pptx` writes a slide deck to `output/fleet-summary.pptx` alongside
