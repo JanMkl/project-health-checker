@@ -73,6 +73,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Re-run the analysis even if the inputs have not changed.",
     )
+    parser.add_argument(
+        "--pptx",
+        action="store_true",
+        help=(
+            "Also write a PowerPoint deck of the findings (one slide per "
+            "project plus an overall summary) to "
+            "<output-dir>/fleet-summary.pptx. Requires python-pptx."
+        ),
+    )
     return parser
 
 
@@ -119,7 +128,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_dir=args.output_dir if args.output_dir != OUTPUT_DIR else config.output_dir,
         )
 
-    if len(config.repos) == 1 and args.repo:
+    # The single-repo shortcut avoids writing a fleet report, but when a deck is
+    # requested we route through run_fleet so the PowerPoint export is produced
+    # the same way for one repo as for many.
+    if len(config.repos) == 1 and args.repo and not args.pptx:
         result = run_repo(
             config.repos[0],
             since=config.since,
@@ -133,11 +145,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Memo written to: {result.memo_path}")
         return 0
 
-    fleet = run_fleet(config, force=args.force)
+    try:
+        fleet = run_fleet(config, force=args.force, pptx=args.pptx)
+    except Exception as exc:  # noqa: BLE001 - surface export/setup errors cleanly
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     analysed = sum(1 for r in fleet.results if r.analysed)
     reused = len(fleet.results) - analysed
     print(f"Analysed {len(fleet.results)} repos ({analysed} re-run, {reused} reused).")
     print(f"Fleet report written to: {fleet.report_path}")
+    if fleet.pptx_path:
+        print(f"Presentation written to: {fleet.pptx_path}")
     return 0
 
 

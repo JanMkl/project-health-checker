@@ -119,6 +119,35 @@ This clones each repo under `output/repos/`, writes one memo per repo
 | `--work-dir`   | no                  | Directory to clone repos into (default: `output/repos`).         |
 | `--output-dir` | no                  | Directory for memos and reports (default: `output`).             |
 | `--force`      | no                  | Re-run analysis even if the inputs have not changed.             |
+| `--pptx`       | no                  | Also write a PowerPoint deck of the findings (see below).        |
+
+## PowerPoint export
+
+Passing `--pptx` writes a slide deck to `output/fleet-summary.pptx` alongside
+the Markdown memos and fleet report. The deck has:
+
+- One slide per project. The top of each slide carries three visuals side by
+  side — **project health**, **project direction**, and **top contributors**.
+  Health and contributors are derived deterministically from the collected git
+  log, issues, and pull requests (bot/automation accounts are excluded from the
+  contributor ranking). Project direction is a single sentence taken from the
+  memo: the memo prompt asks kiro-cli to end its "Direction" section with an
+  explicit `**Direction summary:**` one-liner, which the slide uses verbatim
+  (older memos without the marker fall back to a heuristic summary). Below the
+  visuals, the slide shows a focused recap of the project state — the executive
+  summary, the key risks, and the memo's closing `**Overall assessment:**`
+  one-liner — rather than the full memo, so it does not repeat the top visuals.
+- A final **overall summary** slide rolling every project up by how much
+  management attention it needs.
+
+```bash
+.venv/bin/python -m github_summary_agent --config repos.toml --pptx
+```
+
+The export relies on [`python-pptx`](https://python-pptx.readthedocs.io), which
+is listed in `requirements.txt` (and available as the `pptx` optional extra).
+It is imported only when `--pptx` is used, so the rest of the agent runs without
+it.
 
 ## Running the tests
 

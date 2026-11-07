@@ -62,6 +62,8 @@ class FleetResult:
     results: List[RepoResult]
     report_markdown: str
     report_path: str
+    # Path to the generated PowerPoint deck, or None when --pptx was not used.
+    pptx_path: str | None = None
 
 
 def _slugify(repo: str) -> str:
@@ -180,13 +182,21 @@ def run_repo(
     )
 
 
-def run_fleet(config: Config, *, token: str | None = None, force: bool = False) -> FleetResult:
+def run_fleet(
+    config: Config,
+    *,
+    token: str | None = None,
+    force: bool = False,
+    pptx: bool = False,
+) -> FleetResult:
     """Analyse every repo in ``config`` and write a roll-up report.
 
     Args:
         config: Parsed multi-repo configuration.
         token: Optional GitHub token (falls back to ``GITHUB_AUTH_TOKEN``).
         force: When True, always re-run analyses even if unchanged.
+        pptx: When True, also write a PowerPoint deck summarising the findings
+            (one slide per project plus an overall summary slide).
 
     Returns:
         A :class:`FleetResult`.
@@ -235,8 +245,18 @@ def run_fleet(config: Config, *, token: str | None = None, force: bool = False) 
     with open(report_path, "w", encoding="utf-8") as fh:
         fh.write(report_markdown)
 
+    pptx_path: str | None = None
+    if pptx:
+        # Imported lazily so the optional python-pptx dependency is only needed
+        # when the PowerPoint export is actually requested.
+        from .presentation import build_presentation
+
+        pptx_path = _resolve_output_path(config.output_dir, "fleet-summary.pptx")
+        build_presentation(results, pptx_path)
+
     return FleetResult(
         results=results,
         report_markdown=report_markdown,
         report_path=report_path,
+        pptx_path=pptx_path,
     )

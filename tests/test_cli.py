@@ -27,6 +27,13 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(args.work_dir, "wd")
         self.assertTrue(args.force)
 
+    def test_parses_pptx_flag(self):
+        parser = build_parser()
+        args = parser.parse_args(["--config", "c.toml", "--pptx"])
+        self.assertTrue(args.pptx)
+        default = parser.parse_args(["--config", "c.toml"])
+        self.assertFalse(default.pptx)
+
 
 class MainSingleRepoTests(unittest.TestCase):
     @mock.patch.object(cli, "run_repo")
@@ -43,6 +50,24 @@ class MainSingleRepoTests(unittest.TestCase):
         self.assertEqual(mock_run_repo.call_args.args[0], "o/r")
         self.assertEqual(mock_run_repo.call_args.kwargs["since"], "30 days ago")
 
+    @mock.patch.object(cli, "run_fleet")
+    @mock.patch.object(cli, "run_repo")
+    def test_single_repo_with_pptx_routes_through_run_fleet(
+        self, mock_run_repo, mock_run_fleet
+    ):
+        # With --pptx, even a single repo should go through run_fleet so the
+        # deck is produced, and the run_repo shortcut must be skipped.
+        mock_run_fleet.return_value = mock.Mock(
+            results=[mock.Mock(analysed=True)],
+            report_path="output/fleet-report.md",
+            pptx_path="output/fleet-summary.pptx",
+        )
+        code = main(["--repo", "o/r", "--since", "30 days ago", "--pptx"])
+        self.assertEqual(code, 0)
+        mock_run_repo.assert_not_called()
+        mock_run_fleet.assert_called_once()
+        self.assertTrue(mock_run_fleet.call_args.kwargs["pptx"])
+
 
 class MainFleetTests(unittest.TestCase):
     @mock.patch.object(cli, "run_fleet")
@@ -50,6 +75,7 @@ class MainFleetTests(unittest.TestCase):
         mock_run_fleet.return_value = mock.Mock(
             results=[mock.Mock(analysed=True), mock.Mock(analysed=False)],
             report_path="output/fleet-report.md",
+            pptx_path=None,
         )
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "repos.toml")
@@ -59,6 +85,32 @@ class MainFleetTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         mock_run_fleet.assert_called_once()
+        self.assertFalse(mock_run_fleet.call_args.kwargs["pptx"])
+
+    @mock.patch.object(cli, "run_fleet")
+    def test_config_with_pptx_passes_flag(self, mock_run_fleet):
+        mock_run_fleet.return_value = mock.Mock(
+            results=[mock.Mock(analysed=True)],
+            report_path="output/fleet-report.md",
+            pptx_path="output/fleet-summary.pptx",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "repos.toml")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write('since = "x"\nrepos = ["o/a"]\n')
+            code = main(["--config", path, "--pptx"])
+
+        self.assertEqual(code, 0)
+        self.assertTrue(mock_run_fleet.call_args.kwargs["pptx"])
+
+    @mock.patch.object(cli, "run_fleet", side_effect=RuntimeError("pptx missing"))
+    def test_run_fleet_error_returns_exit_code_1(self, _mock_run_fleet):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "repos.toml")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write('since = "x"\nrepos = ["o/a"]\n')
+            code = main(["--config", path, "--pptx"])
+        self.assertEqual(code, 1)
 
     def test_bad_config_returns_exit_code_2(self):
         with tempfile.TemporaryDirectory() as d:
