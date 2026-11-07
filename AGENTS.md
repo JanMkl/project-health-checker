@@ -37,12 +37,17 @@ Any other shell command is disallowed.
 
 ### Allowed Projects
 
-- The agent may only access the repositories explicitly listed below.
-- Until a project is explicitly listed, the agent has no project access.
-
-Allowed repositories:
-
-- `metal3-io/metal3-dev-env` (https://github.com/metal3-io/metal3-dev-env)
+- The set of repositories the agent may access is defined by the `repos`
+  list in [`repos.toml`](repos.toml) (or the `--repo` argument for a
+  single-repository run). That configuration is the single source of truth for
+  allowed projects.
+- The agent may only clone, fetch, or query repositories that appear in that
+  configuration. Any repository not listed there is out of scope and must not
+  be accessed.
+- Each entry must be a public GitHub repository in `owner/name` form; the agent
+  reads git history and the public issues/pull-requests API only.
+- To grant or revoke access to a project, edit `repos.toml`; do not hard-code a
+  separate allow-list here that could drift from the configuration.
 
 ## Development Rules
 
