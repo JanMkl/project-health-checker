@@ -63,6 +63,9 @@ class MemoTests(unittest.TestCase):
         self.assertIn("ravi", prompt)
         # Prompt instructs not to rely on commits alone.
         self.assertIn("commit authorship alone", prompt)
+        # Prompt requires the explicit one-sentence direction summary marker,
+        # which the presentation export relies on.
+        self.assertIn("**Direction summary:**", prompt)
 
     @mock.patch("github_summary_agent.memo.run_command")
     def test_generate_memo_calls_kiro_cli(self, mock_run):

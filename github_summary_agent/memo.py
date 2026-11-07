@@ -16,20 +16,39 @@ _PROMPT_TEMPLATE = """\
 You are a technical program manager. Using the project activity below, write a \
 management memo in GitHub-flavoured Markdown.
 
-The memo MUST:
-- Start with a top-level heading and a short executive summary.
-- Analyse the DIRECTION of the project (what themes the recent commits, issues, \
-and pull requests point toward).
-- Identify the ACTIVE CONTRIBUTORS AND COMMUNITY MEMBERS. Do NOT rely on commit \
-authorship alone; many active members contribute mainly by opening and \
-resolving issues and by authoring and reviewing pull requests. Cross-reference \
-commit authors with issue and pull-request authors to find who is genuinely \
-active, and call out community members who are active in issues/PRs even if \
-they have few or no commits.
-- Assess the HEALTH of the project (activity level, how open work compares to \
-what is being closed/merged, responsiveness, and risks).
-- Be concise and suitable for a non-technical leadership audience.
-- Output Markdown only, with no surrounding commentary.
+The memo MUST use these sections, with these exact Markdown headings, in this \
+order:
+- A top-level heading (the project name).
+- "## Executive Summary" — a short, self-contained paragraph suitable for a \
+non-technical leadership audience.
+- "## Project Direction" — analyse the DIRECTION of the project (what themes \
+the recent commits, issues, and pull requests point toward). Present the themes \
+as a bulleted list, then end this section with exactly ONE sentence summarising \
+the overall project direction, on its own line, prefixed verbatim with \
+"**Direction summary:**" (for example: "**Direction summary:** The project is \
+in a maturity-focused phase, prioritising stability and security over new \
+features."). This one-sentence summary is REQUIRED and must appear after the \
+bulleted list.
+- "## Active Contributors and Community Members" — identify the active \
+contributors and community members. Do NOT rely on commit authorship alone; \
+many active members contribute mainly by opening and resolving issues and by \
+authoring and reviewing pull requests. Cross-reference commit authors with \
+issue and pull-request authors to find who is genuinely active, and call out \
+community members who are active in issues/PRs even if they have few or no \
+commits.
+- "## Project Health" — assess the health of the project (activity level, how \
+open work compares to what is being closed/merged, and responsiveness).
+- "## Risks" — a bulleted list of the key risks warranting management \
+attention. Each bullet should be a brief, self-contained risk statement.
+- A final closing line, on its own, prefixed verbatim with \
+"**Overall assessment:**" followed by exactly ONE sentence giving the overall \
+bottom-line judgement of the project (for example: "**Overall assessment:** A \
+well-run, actively maintained project whose main management action is reducing \
+reliance on its lead maintainer."). This one-sentence assessment is REQUIRED \
+and must be the last line of the memo.
+
+Be concise and suitable for a non-technical leadership audience. Output \
+Markdown only, with no surrounding commentary.
 
 ## Git activity
 {git_log}
