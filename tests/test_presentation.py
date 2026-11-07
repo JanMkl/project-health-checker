@@ -171,6 +171,34 @@ class BuildPresentationTests(unittest.TestCase):
             self.assertIn("Healthy", summary)
             self.assertIn("Needs attention", summary)
 
+    def test_sections_have_bordered_panels(self):
+        from pptx import Presentation
+        from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+        with tempfile.TemporaryDirectory() as d:
+            out = os.path.join(d, "deck.pptx")
+            build_presentation([_result("o/a", HEALTHY)], out)
+            prs = Presentation(out)
+
+            def panels(slide):
+                return [
+                    sh
+                    for sh in slide.shapes
+                    if sh.shape_type == MSO_SHAPE_TYPE.AUTO_SHAPE
+                ]
+
+            project_panels = panels(prs.slides[0])
+            # Three top visuals + the project-state body each get a panel.
+            self.assertEqual(len(project_panels), 4)
+            # Panels carry a solid fill and a visible border.
+            panel = project_panels[0]
+            self.assertIsNotNone(panel.fill.fore_color.rgb)
+            self.assertIsNotNone(panel.line.color.rgb)
+            self.assertGreater(panel.line.width, 0)
+
+            # The summary slide wraps its body in a panel too.
+            self.assertEqual(len(panels(prs.slides[1])), 1)
+
     def test_single_project_deck_has_two_slides(self):
         with tempfile.TemporaryDirectory() as d:
             out = os.path.join(d, "deck.pptx")

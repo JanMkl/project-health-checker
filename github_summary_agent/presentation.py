@@ -15,6 +15,11 @@ slide. Each project slide follows a fixed structure:
   summary, the key risks, and the memo's closing overall assessment — rather
   than the full memo (which would repeat the top visuals).
 
+Each section sits inside a bordered, lightly-shaded panel so the visuals are
+clearly separated. The palette is intentionally conservative: a neutral grey
+fill with a soft grey border, and only a faint category-tinted fill behind the
+health panel.
+
 The deck depends on ``python-pptx``, which is an optional dependency (install
 the ``pptx`` extra or ``python-pptx`` directly). The import is deferred so the
 rest of the agent works without it; calling :func:`build_presentation` without
@@ -49,12 +54,28 @@ _CATEGORY_LABELS = {
     FAILED: "Failed to analyse",
 }
 
-# RGB accent colours per category (used for the health visual).
+# RGB accent colours per category (used for the health visual title).
 _CATEGORY_COLORS = {
     HEALTHY: (0x2E, 0x7D, 0x32),      # green
     ATTENTION: (0xC6, 0x28, 0x28),    # red
     INVESTIGATE: (0xF5, 0x7F, 0x17),  # amber
     FAILED: (0x61, 0x61, 0x61),       # grey
+}
+
+# Conservative panel palette for the bordered boxes behind each section. A
+# neutral light-grey fill with a soft grey border keeps the slides calm; the
+# health panel gets a very light category-tinted fill so it reads at a glance
+# without making the deck colourful.
+_PANEL_FILL = (0xF4, 0xF5, 0xF7)        # near-white neutral grey
+_PANEL_BORDER = (0xC8, 0xCD, 0xD3)      # soft grey border
+_BODY_PANEL_FILL = (0xFA, 0xFB, 0xFC)   # slightly lighter for the large body
+
+# Very light category-tinted fills for the health panel (kept subtle).
+_CATEGORY_PANEL_FILL = {
+    HEALTHY: (0xEC, 0xF3, 0xEC),      # faint green
+    ATTENTION: (0xF6, 0xEC, 0xEC),    # faint red
+    INVESTIGATE: (0xF6, 0xF1, 0xE8),  # faint amber
+    FAILED: (0xF0, 0xF0, 0xF0),       # faint grey
 }
 
 
@@ -172,20 +193,61 @@ def build_project_slide_data(result, state_text: str | None = None) -> ProjectSl
 # --- Rendering ------------------------------------------------------------
 
 
-def _add_visual_box(slide, left, top, width, height, title, lines, *, accent=None):
-    """Add one of the three top visuals as a titled text box.
+def _add_panel(slide, left, top, width, height, *, fill, border=_PANEL_BORDER):
+    """Draw a bordered, lightly-filled rounded rectangle to group a section.
+
+    The panel is added first so later text boxes render on top of it.
 
     Args:
-        slide: The slide to add to.
-        left, top, width, height: EMU positions/sizes.
-        title: Heading shown at the top of the box.
-        lines: Sequence of body lines (strings).
-        accent: Optional (r, g, b) tuple to colour the title.
+        slide: The slide to add the panel to.
+        left, top, width, height: EMU geometry.
+        fill: (r, g, b) fill colour.
+        border: (r, g, b) border colour.
     """
+    from pptx.enum.shapes import MSO_SHAPE
     from pptx.util import Pt
     from pptx.dml.color import RGBColor
 
-    box = slide.shapes.add_textbox(left, top, width, height)
+    shape = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height
+    )
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = RGBColor(*fill)
+    shape.line.color.rgb = RGBColor(*border)
+    shape.line.width = Pt(1)
+    shape.shadow.inherit = False
+    # No text in the panel itself; it is purely a background container.
+    shape.text_frame.paragraphs[0].text = ""
+    return shape
+
+
+def _add_visual_box(slide, left, top, width, height, title, lines, *, accent=None,
+                    panel_fill=_PANEL_FILL):
+    """Add one of the three top visuals inside a bordered panel.
+
+    A background panel is drawn first, then the title and body text are placed
+    inside it with a little padding so each section is clearly separated.
+
+    Args:
+        slide: The slide to add to.
+        left, top, width, height: EMU positions/sizes of the panel.
+        title: Heading shown at the top of the box.
+        lines: Sequence of body lines (strings).
+        accent: Optional (r, g, b) tuple to colour the title.
+        panel_fill: (r, g, b) fill colour for the background panel.
+    """
+    from pptx.util import Pt, Emu
+    from pptx.dml.color import RGBColor
+
+    from pptx.util import Inches as _Inches
+
+    _add_panel(slide, left, top, width, height, fill=panel_fill)
+
+    # Inset the text inside the panel for padding.
+    pad = Emu(int(_Inches(0.12)))
+    box = slide.shapes.add_textbox(
+        left + pad, top + pad, width - 2 * pad, height - 2 * pad
+    )
     tf = box.text_frame
     tf.word_wrap = True
 
@@ -262,6 +324,7 @@ def _add_project_slide(prs, data: ProjectSlideData) -> None:
         slide, margin, top, col_w, vis_h,
         "Project health", _health_lines(data.health),
         accent=_CATEGORY_COLORS.get(data.health.category),
+        panel_fill=_CATEGORY_PANEL_FILL.get(data.health.category, _PANEL_FILL),
     )
     _add_visual_box(
         slide, margin + col_w + gap, top, col_w, vis_h,
@@ -272,11 +335,15 @@ def _add_project_slide(prs, data: ProjectSlideData) -> None:
         "Top contributors", _contributor_lines(data.contributors),
     )
 
-    # Project state body below the visuals.
+    # Project state body below the visuals, inside its own bordered panel.
     body_top = top + vis_h + Inches(0.2)
     body_h = prs.slide_height - body_top - Inches(0.3)
+    body_w = slide_width - 2 * margin
+    _add_panel(slide, margin, body_top, body_w, body_h, fill=_BODY_PANEL_FILL)
+
+    pad = Inches(0.12)
     body_box = slide.shapes.add_textbox(
-        margin, body_top, slide_width - 2 * margin, body_h
+        margin + pad, body_top + pad, body_w - 2 * pad, body_h - 2 * pad
     )
     body_tf = body_box.text_frame
     body_tf.word_wrap = True
@@ -313,8 +380,15 @@ def _add_summary_slide(prs, fleet_data: Sequence[ProjectSlideData]) -> None:
         counts[d.health.category] = counts.get(d.health.category, 0) + 1
     total = len(fleet_data)
 
+    panel_left = Inches(0.4)
+    panel_top = Inches(1.1)
+    panel_w = slide_width - Inches(0.8)
+    panel_h = prs.slide_height - Inches(1.5)
+    _add_panel(slide, panel_left, panel_top, panel_w, panel_h, fill=_BODY_PANEL_FILL)
+
+    pad = Inches(0.12)
     body_box = slide.shapes.add_textbox(
-        Inches(0.4), Inches(1.1), slide_width - Inches(0.8), prs.slide_height - Inches(1.5)
+        panel_left + pad, panel_top + pad, panel_w - 2 * pad, panel_h - 2 * pad
     )
     tf = body_box.text_frame
     tf.word_wrap = True
