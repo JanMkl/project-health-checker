@@ -26,8 +26,12 @@ class BackendsTests(unittest.TestCase):
     def test_supported_backends(self):
         self.assertEqual(set(SUPPORTED_BACKENDS), {KIRO, CODEX, CURSOR})
 
-    def test_backend_commands_match_names(self):
-        self.assertEqual(BACKEND_COMMANDS, {KIRO, CODEX, CURSOR})
+    def test_backend_commands_include_all_candidate_executables(self):
+        # Cursor ships under both "cursor-agent" and the bare "agent".
+        self.assertEqual(BACKEND_COMMANDS, {KIRO, CODEX, CURSOR, "agent"})
+
+    def test_cursor_backend_lists_both_executables(self):
+        self.assertEqual(get_backend(CURSOR).executables, ("cursor-agent", "agent"))
 
     def test_kiro_argv(self):
         argv = get_backend(KIRO).argv
@@ -71,6 +75,40 @@ class StdoutBackendRunTests(unittest.TestCase):
 
         out = get_backend(CURSOR).generate("PROMPT", runner, None)
         self.assertEqual(out, "cursor memo")
+
+
+class CursorExecutableResolutionTests(unittest.TestCase):
+    def _run_with_which(self, available):
+        from unittest import mock
+
+        captured = {}
+
+        def runner(argv, *, timeout=None, stdin_input=None):
+            captured["argv"] = argv
+            return _FakeResult(stdout="ok")
+
+        with mock.patch(
+            "github_summary_agent.backends.shutil.which",
+            side_effect=lambda e: e if e in available else None,
+        ):
+            get_backend(CURSOR).generate("PROMPT", runner, None)
+        return captured["argv"]
+
+    def test_prefers_cursor_agent_when_present(self):
+        argv = self._run_with_which({"cursor-agent", "agent"})
+        self.assertEqual(argv[0], "cursor-agent")
+
+    def test_falls_back_to_bare_agent(self):
+        # Only the bare `agent` entry point is installed.
+        argv = self._run_with_which({"agent"})
+        self.assertEqual(argv[0], "agent")
+        # The rest of the invocation is unchanged.
+        self.assertEqual(argv[1:], ["--print", "--output-format", "text"])
+
+    def test_falls_back_to_primary_name_when_none_found(self):
+        # Neither is installed: use the primary name so the error names it.
+        argv = self._run_with_which(set())
+        self.assertEqual(argv[0], "cursor-agent")
 
 
 class CodexBackendRunTests(unittest.TestCase):

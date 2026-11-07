@@ -131,15 +131,18 @@ This clones each repo under `output/repos/`, writes one memo per repo
 
 The memos are written by an AI coding CLI. Pick whichever you have installed:
 
-| Backend        | Executable      | Invocation (non-interactive)              |
-| -------------- | --------------- | ----------------------------------------- |
-| `kiro-cli`     | `kiro-cli`      | `kiro-cli chat --no-interactive --trust-all-tools` |
-| `codex`        | `codex`         | `codex exec`                              |
-| `cursor-agent` | `cursor-agent`  | `cursor-agent --print --output-format text` |
+| Backend        | Executable                  | Invocation (non-interactive)              |
+| -------------- | --------------------------- | ----------------------------------------- |
+| `kiro-cli`     | `kiro-cli`                  | `kiro-cli chat --no-interactive --trust-all-tools` |
+| `codex`        | `codex`                     | `codex exec`                              |
+| `cursor-agent` | `cursor-agent` or `agent`   | `cursor-agent --print --output-format text` |
 
-In every case the prompt is fed on stdin (so large repositories don't hit the
-OS argument-length limit) and the memo is read from stdout. Select a backend per
-run with `--backend`, or set a default in the config:
+The prompt is always fed on stdin (so large repositories don't hit the OS
+argument-length limit). `kiro-cli` and `cursor-agent` print the memo to stdout;
+`codex exec` prints an event log, so the agent captures its final message via
+`--output-last-message` instead. Cursor installs its CLI under both
+`cursor-agent` and the bare name `agent` — whichever is on your `PATH` is used.
+Select a backend per run with `--backend`, or set a default in the config:
 
 ```toml
 # repos.toml

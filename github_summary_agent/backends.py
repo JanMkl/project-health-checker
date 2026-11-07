@@ -28,9 +28,10 @@ each backend uses is also registered in :data:`commands.ALLOWED_COMMANDS`.
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
-from dataclasses import dataclass
-from typing import Callable, Dict, List
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Tuple
 
 # Backend identifiers accepted on the CLI / in config.
 KIRO = "kiro-cli"
@@ -45,8 +46,8 @@ class UnknownBackendError(ValueError):
 
 
 # A runner executes the backend and returns the memo text. It receives the
-# backend's base argv, the prompt, the low-level command executor (injected to
-# avoid an import cycle with :mod:`commands`), and an optional timeout.
+# backend's resolved argv, the prompt, the low-level command executor (injected
+# to avoid an import cycle with :mod:`commands`), and an optional timeout.
 RunFn = Callable[[List[str], str, Callable, "float | None"], str]
 
 
@@ -55,18 +56,39 @@ class Backend:
     """How to invoke a particular AI CLI for a one-shot memo generation.
 
     Attributes:
-        name: The backend identifier (also the executable name).
-        argv: The base command and arguments for a non-interactive run.
+        name: The backend identifier.
+        argv: The base command and arguments for a non-interactive run. The
+            first element is the default executable name.
         run: Strategy that executes the tool and returns the memo text.
+        executables: Candidate executable names, in preference order. The first
+            one found on ``PATH`` is used; this lets a tool that installs under
+            more than one name (e.g. Cursor ships both ``cursor-agent`` and
+            ``agent``) work regardless of which entry point exists. Defaults to
+            just ``argv[0]``.
     """
 
     name: str
     argv: List[str]
     run: RunFn
+    executables: Tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.executables:
+            object.__setattr__(self, "executables", (self.argv[0],))
+
+    def _resolve_argv(self) -> List[str]:
+        """Return argv with argv[0] set to the first executable found on PATH.
+
+        Falls back to the first candidate name when none is found, so the error
+        surfaced to the user names the primary executable.
+        """
+        chosen = next((e for e in self.executables if shutil.which(e)), None)
+        exe = chosen or self.executables[0]
+        return [exe, *self.argv[1:]]
 
     def generate(self, prompt: str, runner: Callable, timeout: float | None) -> str:
         """Run the backend for ``prompt`` and return the memo text."""
-        return self.run(list(self.argv), prompt, runner, timeout)
+        return self.run(self._resolve_argv(), prompt, runner, timeout)
 
 
 def _run_stdout(argv: List[str], prompt: str, runner: Callable, timeout) -> str:
@@ -108,19 +130,28 @@ def _run_codex(argv: List[str], prompt: str, runner: Callable, timeout) -> str:
 #   0.167.0: "If not provided as an argument (or if `-` is used), instructions
 #   are read from stdin").
 # - `cursor-agent --print` runs non-interactively; `--output-format text` keeps
-#   stdout to plain text. The prompt is read from stdin.
+#   stdout to plain text. The prompt is read from stdin. Cursor installs the
+#   tool under two names (`cursor-agent` and the bare `agent`), so both are
+#   accepted; whichever is on PATH is used.
 _BACKENDS: Dict[str, Backend] = {
     KIRO: Backend(
         KIRO, ["kiro-cli", "chat", "--no-interactive", "--trust-all-tools"], _run_stdout
     ),
     CODEX: Backend(CODEX, ["codex", "exec", "-"], _run_codex),
     CURSOR: Backend(
-        CURSOR, ["cursor-agent", "--print", "--output-format", "text"], _run_stdout
+        CURSOR,
+        ["cursor-agent", "--print", "--output-format", "text"],
+        _run_stdout,
+        executables=("cursor-agent", "agent"),
     ),
 }
 
-# Executable names the backends may launch, for the command allow-list.
-BACKEND_COMMANDS = frozenset(b.argv[0] for b in _BACKENDS.values())
+# Executable names the backends may launch, for the command allow-list. Includes
+# every candidate executable so an alternately-named entry point (e.g. Cursor's
+# bare `agent`) is still permitted.
+BACKEND_COMMANDS = frozenset(
+    exe for b in _BACKENDS.values() for exe in b.executables
+)
 
 # Names accepted from users, for help text and validation.
 SUPPORTED_BACKENDS = tuple(_BACKENDS.keys())

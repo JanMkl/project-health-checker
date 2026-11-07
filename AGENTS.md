@@ -11,7 +11,8 @@ This file defines the access boundaries for the agent. The agent must operate st
 The agent may only invoke the following shell commands:
 
 - One AI coding CLI used to write the memos, selected by configuration:
-  `kiro-cli` (default), `codex`, or `cursor-agent`.
+  `kiro-cli` (default), `codex`, or `cursor-agent` (which Cursor also installs
+  under the bare name `agent`).
 - `git`
 - `curl`
 
