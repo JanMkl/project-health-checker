@@ -122,10 +122,8 @@ def generate_memo(
         open_pulls=open_pulls,
         closed_pulls=closed_pulls,
     )
-    # Feed the prompt on stdin rather than as a command-line argument. Prompts
-    # for large repositories can exceed the OS argument-length limit (ARG_MAX),
-    # which raises "OSError: [Errno 7] Argument list too long". Every supported
-    # backend reads its prompt from stdin in non-interactive mode.
-    args = get_backend(backend).build_args()
-    result = run_command(args, timeout=timeout, stdin_input=prompt)
-    return result.stdout.strip()
+    # Each backend runs its tool non-interactively, feeding the prompt on stdin
+    # (prompts for large repos can exceed the OS argument-length limit) and
+    # returning just the memo text. run_command is injected so the backend's
+    # shell access still goes through the AGENTS.md allow-list.
+    return get_backend(backend).generate(prompt, run_command, timeout)

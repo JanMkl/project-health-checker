@@ -91,9 +91,17 @@ class MemoTests(unittest.TestCase):
 
     @mock.patch("github_summary_agent.memo.run_command")
     def test_generate_memo_uses_codex_backend(self, mock_run):
-        mock_run.return_value = CommandResult(0, "# Memo\n", "")
+        # codex returns the memo via --output-last-message, not stdout, so the
+        # fake writes the file and returns noisy stdout that must be ignored.
+        def fake_run(argv, *, timeout=None, stdin_input=None):
+            path = argv[argv.index("--output-last-message") + 1]
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("# Codex Memo\n\nclean\n")
+            return CommandResult(0, "OpenAI Codex v0.0\nframing noise", "")
+
+        mock_run.side_effect = fake_run
         open_issues, closed_issues, open_pulls, closed_pulls = _sample_activity()
-        generate_memo(
+        memo = generate_memo(
             _sample_log(),
             open_issues=open_issues,
             closed_issues=closed_issues,
@@ -106,6 +114,8 @@ class MemoTests(unittest.TestCase):
         self.assertIn("exec", args)
         # Prompt still fed on stdin.
         self.assertIsNotNone(mock_run.call_args.kwargs["stdin_input"])
+        # The memo comes from the last-message file, not the noisy stdout.
+        self.assertEqual(memo, "# Codex Memo\n\nclean")
 
     @mock.patch("github_summary_agent.memo.run_command")
     def test_generate_memo_uses_cursor_backend(self, mock_run):

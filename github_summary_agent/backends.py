@@ -9,10 +9,17 @@ have installed:
 - ``codex`` (OpenAI Codex CLI, via its non-interactive ``exec`` subcommand)
 - ``cursor-agent`` (Cursor's agent CLI, via its non-interactive print mode)
 
-Each backend knows how to build an argument vector for a one-shot,
-non-interactive run that reads a prompt and prints the result to stdout. The
-prompt is always fed on stdin to stay clear of the OS argument-length limit
-(ARG_MAX) for large repositories.
+Each backend runs the tool once, non-interactively, feeding the prompt on stdin
+(to stay clear of the OS argument-length limit, ARG_MAX, for large repos) and
+returning just the generated memo text.
+
+The backends differ in how they emit their result:
+
+- ``kiro-cli`` and ``cursor-agent`` print the final text to stdout, so we read
+  it directly.
+- ``codex exec`` prints a framed event log to stdout (header, prompt echo,
+  token usage, ...), so we ask it to write only the final message to a file via
+  ``--output-last-message`` and read that back.
 
 To keep the AGENTS.md command allow-list enforced in one place, the executable
 each backend uses is also registered in :data:`commands.ALLOWED_COMMANDS`.
@@ -20,6 +27,8 @@ each backend uses is also registered in :data:`commands.ALLOWED_COMMANDS`.
 
 from __future__ import annotations
 
+import os
+import tempfile
 from dataclasses import dataclass
 from typing import Callable, Dict, List
 
@@ -35,51 +44,83 @@ class UnknownBackendError(ValueError):
     """Raised when an unrecognised backend name is requested."""
 
 
+# A runner executes the backend and returns the memo text. It receives the
+# backend's base argv, the prompt, the low-level command executor (injected to
+# avoid an import cycle with :mod:`commands`), and an optional timeout.
+RunFn = Callable[[List[str], str, Callable, "float | None"], str]
+
+
 @dataclass(frozen=True)
 class Backend:
     """How to invoke a particular AI CLI for a one-shot memo generation.
 
     Attributes:
         name: The backend identifier (also the executable name).
-        build_args: Builds the argv for a non-interactive run. The prompt is
-            supplied separately on stdin, so most backends ignore it, but it is
-            passed in for backends that need it on the command line.
+        argv: The base command and arguments for a non-interactive run.
+        run: Strategy that executes the tool and returns the memo text.
     """
 
     name: str
-    build_args: Callable[[], List[str]]
+    argv: List[str]
+    run: RunFn
+
+    def generate(self, prompt: str, runner: Callable, timeout: float | None) -> str:
+        """Run the backend for ``prompt`` and return the memo text."""
+        return self.run(list(self.argv), prompt, runner, timeout)
 
 
-def _kiro_args() -> List[str]:
-    # `kiro-cli chat` reads the prompt from stdin when no positional INPUT is
-    # given. `--no-interactive` runs without expecting further input and
-    # `--trust-all-tools` avoids blocking on tool-permission prompts.
-    return ["kiro-cli", "chat", "--no-interactive", "--trust-all-tools"]
+def _run_stdout(argv: List[str], prompt: str, runner: Callable, timeout) -> str:
+    """Run a backend that prints the clean result to stdout."""
+    result = runner(argv, timeout=timeout, stdin_input=prompt)
+    return result.stdout.strip()
 
 
-def _codex_args() -> List[str]:
-    # `codex exec` is the Codex CLI's non-interactive mode; it reads the prompt
-    # from stdin when no prompt argument is given and prints the final message
-    # to stdout.
-    return ["codex", "exec", "-"]
+def _run_codex(argv: List[str], prompt: str, runner: Callable, timeout) -> str:
+    """Run codex, capturing only the final message via --output-last-message.
+
+    ``codex exec`` writes a framed event log to stdout, so reading stdout would
+    pollute the memo. ``--output-last-message`` writes just the final agent
+    message to a file, which is exactly the memo we want.
+    """
+    fd, last_message_path = tempfile.mkstemp(prefix="codex-memo-", suffix=".md")
+    os.close(fd)
+    try:
+        runner(
+            argv + ["--output-last-message", last_message_path],
+            timeout=timeout,
+            stdin_input=prompt,
+        )
+        with open(last_message_path, encoding="utf-8") as fh:
+            return fh.read().strip()
+    finally:
+        try:
+            os.remove(last_message_path)
+        except OSError:
+            pass
 
 
-def _cursor_args() -> List[str]:
-    # `cursor-agent -p/--print` runs non-interactively and prints the result;
-    # `--output-format text` keeps stdout to plain text (no JSON envelope). The
-    # prompt is read from stdin.
-    return ["cursor-agent", "--print", "--output-format", "text"]
-
-
-# Registry of the supported backends.
+# Base argv per backend.
+#
+# - `kiro-cli chat` reads the prompt from stdin when no positional INPUT is
+#   given. `--no-interactive` runs without further input; `--trust-all-tools`
+#   avoids blocking on tool-permission prompts.
+# - `codex exec -` reads the prompt from stdin (verified against codex-cli
+#   0.167.0: "If not provided as an argument (or if `-` is used), instructions
+#   are read from stdin").
+# - `cursor-agent --print` runs non-interactively; `--output-format text` keeps
+#   stdout to plain text. The prompt is read from stdin.
 _BACKENDS: Dict[str, Backend] = {
-    KIRO: Backend(KIRO, _kiro_args),
-    CODEX: Backend(CODEX, _codex_args),
-    CURSOR: Backend(CURSOR, _cursor_args),
+    KIRO: Backend(
+        KIRO, ["kiro-cli", "chat", "--no-interactive", "--trust-all-tools"], _run_stdout
+    ),
+    CODEX: Backend(CODEX, ["codex", "exec", "-"], _run_codex),
+    CURSOR: Backend(
+        CURSOR, ["cursor-agent", "--print", "--output-format", "text"], _run_stdout
+    ),
 }
 
 # Executable names the backends may launch, for the command allow-list.
-BACKEND_COMMANDS = frozenset(b.name for b in _BACKENDS.values())
+BACKEND_COMMANDS = frozenset(b.argv[0] for b in _BACKENDS.values())
 
 # Names accepted from users, for help text and validation.
 SUPPORTED_BACKENDS = tuple(_BACKENDS.keys())
