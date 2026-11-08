@@ -19,10 +19,13 @@ def _write_config(path, repos=("metal3-io/metal3-dev-env",), since="90 days ago"
 
 
 class WebAppTestBase(unittest.TestCase):
+    # Credential env vars are mutated by the (in-memory) credential store, so
+    # every webapp test saves and restores them to stay isolated.
+    _CRED_ENV = ("GITHUB_AUTH_TOKEN", "OPENAI_API_KEY", "CURSOR_API_KEY")
+
     def setUp(self):
         self.dir = tempfile.mkdtemp()
         self.config_path = os.path.join(self.dir, "repos.toml")
-        self.secrets_dir = os.path.join(self.dir, "secrets")
         self.output_dir = os.path.join(self.dir, "output")
         os.makedirs(self.output_dir, exist_ok=True)
         _write_config(self.config_path)
@@ -30,6 +33,11 @@ class WebAppTestBase(unittest.TestCase):
         # resolve there.
         with open(self.config_path, "a", encoding="utf-8") as fh:
             fh.write(f'output_dir = "{self.output_dir}"\n')
+
+        # Snapshot and clear credential env so tests start from a clean slate.
+        self._saved_env = {v: os.environ.get(v) for v in self._CRED_ENV}
+        for v in self._CRED_ENV:
+            os.environ.pop(v, None)
 
         # Record calls to the injected runner instead of running a real fleet.
         self.run_calls = []
@@ -43,12 +51,18 @@ class WebAppTestBase(unittest.TestCase):
         self.kiro_status = "logged_out"
         self.app = create_app(
             config_path=self.config_path,
-            credentials_dir=self.secrets_dir,
             run_fleet_fn=fake_run_fleet,
             kiro_status_fn=lambda: self.kiro_status,
         )
         # Do not auto-follow 303 redirects so we can assert them.
         self.client = TestClient(self.app, follow_redirects=False)
+
+    def tearDown(self):
+        for var, value in self._saved_env.items():
+            if value is None:
+                os.environ.pop(var, None)
+            else:
+                os.environ[var] = value
 
     def _config(self):
         return load_config(self.config_path)
@@ -159,7 +173,7 @@ class SettingsTests(WebAppTestBase):
 
 
 class CredentialTests(WebAppTestBase):
-    def test_save_credentials_persists_without_exposing_values(self):
+    def test_save_credentials_sets_env_without_writing_disk(self):
         r = self.client.post(
             "/credentials",
             data={
@@ -170,21 +184,53 @@ class CredentialTests(WebAppTestBase):
         )
         self.assertEqual(r.status_code, 303)
         self.assertEqual(r.headers["location"], "/credentials")
-        # Stored on disk with restrictive permissions.
-        env_file = os.path.join(self.secrets_dir, "credentials.env")
-        self.assertTrue(os.path.exists(env_file))
-        self.assertEqual(oct(os.stat(env_file).st_mode & 0o777), "0o600")
-        contents = open(env_file).read()
-        self.assertIn("GITHUB_AUTH_TOKEN=ghp_secret123", contents)
-        self.assertIn("OPENAI_API_KEY=sk-openai", contents)
 
-        # Applied to the environment for the next run.
+        # Applied to the process environment only.
         self.assertEqual(os.environ.get("GITHUB_AUTH_TOKEN"), "ghp_secret123")
+        self.assertEqual(os.environ.get("OPENAI_API_KEY"), "sk-openai")
+
+        # Nothing is written to disk anywhere under the working/temp dir.
+        for root, _dirs, files in os.walk(self.dir):
+            for name in files:
+                with open(os.path.join(root, name), "rb") as fh:
+                    self.assertNotIn(b"ghp_secret123", fh.read(), name)
 
         # The credentials page shows status, never the secret value itself.
         page = self.client.get("/credentials").text
         self.assertNotIn("ghp_secret123", page)
         self.assertIn("set", page)  # a "✅ set" badge is present
+
+    def test_blank_field_keeps_existing_value(self):
+        self.client.post("/credentials", data={"github_token": "ghp_keep"})
+        # A later save that leaves the field blank must not wipe it.
+        self.client.post(
+            "/credentials",
+            data={"github_token": "", "openai_api_key": "sk-new"},
+        )
+        self.assertEqual(os.environ.get("GITHUB_AUTH_TOKEN"), "ghp_keep")
+        self.assertEqual(os.environ.get("OPENAI_API_KEY"), "sk-new")
+
+    def test_clear_credential_removes_it(self):
+        self.client.post("/credentials", data={"github_token": "ghp_x"})
+        self.assertEqual(os.environ.get("GITHUB_AUTH_TOKEN"), "ghp_x")
+        r = self.client.post("/credentials/clear", data={"key": "github_token"})
+        self.assertEqual(r.status_code, 303)
+        self.assertEqual(r.headers["location"], "/credentials")
+        self.assertIsNone(os.environ.get("GITHUB_AUTH_TOKEN"))
+
+    def test_clear_button_shown_only_when_set(self):
+        # Not set -> no clear button for the GitHub token.
+        page = self.client.get("/credentials").text
+        self.assertNotIn('value="github_token"', page)
+        # Set it -> a clear button appears.
+        self.client.post("/credentials", data={"github_token": "ghp_x"})
+        page = self.client.get("/credentials").text
+        self.assertIn('value="github_token"', page)
+
+    def test_credentials_page_notes_in_memory_only(self):
+        page = self.client.get("/credentials").text
+        self.assertIn("never written to", page)
+        self.assertIn("re-enter", page.lower())
 
     def test_kiro_status_shown_on_credentials_page(self):
         from health_checker_agent.backends import (
@@ -201,7 +247,6 @@ class CredentialTests(WebAppTestBase):
         for status_value, expected in cases.items():
             app = create_app(
                 config_path=self.config_path,
-                credentials_dir=self.secrets_dir,
                 run_fleet_fn=self.fake_run_fleet,
                 kiro_status_fn=lambda sv=status_value: sv,
             )
@@ -217,11 +262,6 @@ class CredentialTests(WebAppTestBase):
         )
         # The note explains kiro-cli cannot use an API key.
         self.assertIn("device-code login", page)
-
-    def tearDown(self):
-        # Avoid leaking test credentials into other tests' environment.
-        for var in ("GITHUB_AUTH_TOKEN", "OPENAI_API_KEY", "CURSOR_API_KEY"):
-            os.environ.pop(var, None)
 
 
 class MemoBrowseTests(WebAppTestBase):
@@ -331,8 +371,8 @@ class RunAnalysisTests(WebAppTestBase):
 
         app = create_app(
             config_path=self.config_path,
-            credentials_dir=self.secrets_dir,
             run_fleet_fn=boom,
+            kiro_status_fn=lambda: "logged_out",
         )
         client = TestClient(app, follow_redirects=False)
         client.post("/run", data={})

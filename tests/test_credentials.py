@@ -1,5 +1,4 @@
 import os
-import tempfile
 import unittest
 
 from health_checker_agent.credentials import CREDENTIAL_ENV_VARS, CredentialStore
@@ -7,11 +6,9 @@ from health_checker_agent.credentials import CREDENTIAL_ENV_VARS, CredentialStor
 
 class CredentialStoreTests(unittest.TestCase):
     def setUp(self):
-        self.dir = tempfile.mkdtemp()
-        self.store = CredentialStore(self.dir)
-        self._saved_env = {
-            v: os.environ.get(v) for v in CREDENTIAL_ENV_VARS.values()
-        }
+        self.store = CredentialStore()
+        # Snapshot and clear the credential env vars for isolation.
+        self._saved_env = {v: os.environ.get(v) for v in CREDENTIAL_ENV_VARS.values()}
         for v in CREDENTIAL_ENV_VARS.values():
             os.environ.pop(v, None)
 
@@ -22,48 +19,50 @@ class CredentialStoreTests(unittest.TestCase):
             else:
                 os.environ[var] = value
 
-    def test_empty_when_no_file(self):
-        self.assertEqual(self.store.load(), {})
+    def test_empty_status_when_unset(self):
         self.assertEqual(
             self.store.status(),
             {"github_token": False, "openai_api_key": False, "cursor_api_key": False},
         )
 
-    def test_save_and_load(self):
+    def test_save_sets_environment(self):
         self.store.save({"github_token": "ghp_x", "openai_api_key": "sk-y"})
-        loaded = self.store.load()
-        self.assertEqual(loaded["github_token"], "ghp_x")
-        self.assertEqual(loaded["openai_api_key"], "sk-y")
-
-    def test_save_applies_to_environment(self):
-        self.store.save({"github_token": "ghp_x"})
         self.assertEqual(os.environ["GITHUB_AUTH_TOKEN"], "ghp_x")
+        self.assertEqual(os.environ["OPENAI_API_KEY"], "sk-y")
+        self.assertTrue(self.store.status()["github_token"])
+        self.assertTrue(self.store.status()["openai_api_key"])
 
-    def test_file_permissions_are_restrictive(self):
-        self.store.save({"cursor_api_key": "key"})
-        mode = os.stat(self.store.path).st_mode & 0o777
-        self.assertEqual(mode, 0o600)
-
-    def test_blank_value_removes_key(self):
+    def test_blank_value_keeps_existing(self):
         self.store.save({"github_token": "ghp_x"})
+        # A blank value must not wipe a previously-set credential.
         self.store.save({"github_token": ""})
-        self.assertNotIn("github_token", self.store.load())
+        self.assertEqual(os.environ.get("GITHUB_AUTH_TOKEN"), "ghp_x")
+
+    def test_clear_removes_env(self):
+        self.store.save({"cursor_api_key": "key"})
+        self.store.clear(["cursor_api_key"])
+        self.assertIsNone(os.environ.get("CURSOR_API_KEY"))
+        self.assertFalse(self.store.status()["cursor_api_key"])
 
     def test_update_merges_without_dropping_others(self):
         self.store.save({"github_token": "ghp_x"})
         self.store.save({"openai_api_key": "sk-y"})
-        loaded = self.store.load()
-        self.assertEqual(loaded.get("github_token"), "ghp_x")
-        self.assertEqual(loaded.get("openai_api_key"), "sk-y")
+        self.assertEqual(os.environ.get("GITHUB_AUTH_TOKEN"), "ghp_x")
+        self.assertEqual(os.environ.get("OPENAI_API_KEY"), "sk-y")
 
     def test_unknown_keys_ignored(self):
         self.store.save({"not_a_cred": "value", "github_token": "ghp_x"})
-        self.assertEqual(set(self.store.load()), {"github_token"})
+        self.assertEqual(os.environ.get("GITHUB_AUTH_TOKEN"), "ghp_x")
+        self.assertNotIn("not_a_cred", os.environ)
 
-    def test_status_reflects_environment_fallback(self):
-        # A credential present only in the environment still counts as "set".
+    def test_status_reflects_preexisting_environment(self):
+        # A credential exported in the shell before launch counts as "set".
         os.environ["CURSOR_API_KEY"] = "env-key"
         self.assertTrue(self.store.status()["cursor_api_key"])
+
+    def test_apply_is_noop(self):
+        # apply() exists for API compatibility and must not raise.
+        self.store.apply()
 
 
 if __name__ == "__main__":

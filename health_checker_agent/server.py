@@ -4,12 +4,14 @@ Exposes a module-level ``app`` so the container (and local development) can run:
 
     uvicorn health_checker_agent.server:app --host 0.0.0.0 --port 8080
 
-Paths are read from the environment so the same image works with different
-mounts:
+The config path is read from the environment so the same image works with
+different mounts:
 
-- ``HEALTH_CHECKER_CONFIG``       path to ``repos.toml`` (default: ``repos.toml``)
-- ``HEALTH_CHECKER_SECRETS_DIR``  directory for persisted credentials
-                                  (default: ``secrets``)
+- ``HEALTH_CHECKER_CONFIG``  path to ``repos.toml`` (default: ``repos.toml``)
+
+Credentials are never read from or written to disk: they live only in the
+process environment (set in the browser on the Credentials page, or exported in
+the shell before launch). They must be re-entered after a restart.
 
 Running this module directly starts uvicorn on 0.0.0.0:8080.
 """
@@ -18,13 +20,10 @@ from __future__ import annotations
 
 import os
 
-from .webapp import DEFAULT_CONFIG_PATH, DEFAULT_CREDENTIALS_DIR, create_app
+from .webapp import DEFAULT_CONFIG_PATH, create_app
 
 app = create_app(
     config_path=os.environ.get("HEALTH_CHECKER_CONFIG", DEFAULT_CONFIG_PATH),
-    credentials_dir=os.environ.get(
-        "HEALTH_CHECKER_SECRETS_DIR", DEFAULT_CREDENTIALS_DIR
-    ),
 )
 
 

@@ -66,13 +66,14 @@ Then open <http://localhost:8080>. A navigation bar links the pages:
 - **Repositories** — add/remove the repositories to analyse (persisted to
   `repos.toml`).
 - **Settings** — set the analysis window (`since`/`until`) and the backend.
-- **Credentials** — enter the GitHub token and AI-tool API keys (stored under
-  `secrets/`, never shown back in the browser).
+- **Credentials** — enter the GitHub token and AI-tool API keys (kept only in
+  memory, never shown back in the browser or written to disk).
 - **Run analysis** — (re-)run the analysis; it runs in the background and this
   page shows the status.
 
-`docker compose up` bind-mounts `repos.toml`, `output/`, and `secrets/` so your
-config, results, and credentials persist on the host across restarts.
+`docker compose up` bind-mounts `repos.toml` and `output/` so your config and
+results persist on the host across restarts. Credentials are deliberately not
+persisted — see below.
 
 ### Image size: skipping kiro-cli
 
@@ -84,23 +85,30 @@ All three CLIs are installed by default. The `kiro-cli` binary is large
 INSTALL_KIRO_CLI=false docker compose build
 ```
 
-### Authentication in the container
+### Authentication (credentials are never stored on disk)
 
-The GitHub token and the codex (`OPENAI_API_KEY`) and cursor (`CURSOR_API_KEY`)
-keys can be entered in the UI, which is the simplest path in a container.
-`kiro-cli` instead uses a device-code login — run it once inside the running
-container and persist its credential directory:
+For safety, secrets are kept only in the running process's memory — nothing is
+written to disk. This means **you re-enter credentials after every restart**,
+but they can never leak from a file. Two paths set them:
 
-```bash
-docker compose exec health-checker kiro-cli login --use-device-flow
-```
+1. **GitHub token and the codex (`OPENAI_API_KEY`) / cursor (`CURSOR_API_KEY`)
+   keys** — enter them on the Credentials page (or `export` them in the shell
+   before launch, which the app picks up automatically). They are held in the
+   process environment and cleared when the container stops.
+2. **kiro-cli** — it can't use an API key; it uses a device-code login. After
+   the container is up, run it once from a terminal:
+
+   ```bash
+   docker compose exec health-checker kiro-cli login --use-device-flow
+   ```
+
+   (Follow the printed URL/code to authenticate.) `codex` similarly supports
+   `codex login --device-auth`.
 
 The Credentials page shows the current kiro-cli login status (logged in / not
-logged in / not installed) and this same command, so you can tell at a glance
-whether the device login still needs to be done.
-
-(Follow the printed URL/code to authenticate.) `codex` also supports
-`codex login --device-auth` for the same purpose.
+logged in / not installed) and the command above, so you can tell at a glance
+whether the login still needs doing. Because the kiro-cli login is not
+persisted either, it must be redone after a restart.
 
 ### Running the UI without Docker
 

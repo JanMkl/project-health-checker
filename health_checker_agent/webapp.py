@@ -56,9 +56,6 @@ from .config import (
 from .credentials import CredentialStore
 
 DEFAULT_CONFIG_PATH = "repos.toml"
-# Directory where credentials (and other persisted secrets) live. Mounted as a
-# volume in the container so it survives restarts.
-DEFAULT_CREDENTIALS_DIR = "secrets"
 
 # Navigation bar entries: (path, label). Order drives the nav bar; "/" is the
 # default landing page (Memos & Presentation).
@@ -90,7 +87,6 @@ def _now() -> str:
 def create_app(
     *,
     config_path: str = DEFAULT_CONFIG_PATH,
-    credentials_dir: str = DEFAULT_CREDENTIALS_DIR,
     run_fleet_fn=None,
     kiro_status_fn=None,
 ) -> FastAPI:
@@ -98,7 +94,6 @@ def create_app(
 
     Args:
         config_path: Path to the ``repos.toml`` the UI reads and writes.
-        credentials_dir: Directory for the persisted credential store.
         run_fleet_fn: Injectable analysis runner (defaults to
             :func:`agent.run_fleet`). Tests pass a stub.
         kiro_status_fn: Injectable kiro-cli login-status probe (defaults to
@@ -110,9 +105,8 @@ def create_app(
     if kiro_status_fn is None:
         kiro_status_fn = kiro_login_status
 
-    creds = CredentialStore(credentials_dir)
-    # Apply any previously-stored credentials to the environment on startup.
-    creds.apply()
+    # Credentials live only in the process environment, never on disk.
+    creds = CredentialStore()
 
     status = RunStatus()
     app = FastAPI(title="Project Health Checker")
@@ -152,7 +146,6 @@ def create_app(
         def worker() -> None:
             try:
                 config = _read_config()
-                creds.apply()
                 run_fleet_fn(config, force=force, pptx=True)
                 msg = "Analysis complete."
                 ok = True
@@ -253,6 +246,11 @@ def create_app(
                 "cursor_api_key": cursor_api_key,
             }
         )
+        return RedirectResponse("/credentials", status_code=303)
+
+    @app.post("/credentials/clear")
+    def clear_credential(key: str = Form(...)):
+        creds.clear([key.strip()])
         return RedirectResponse("/credentials", status_code=303)
 
     @app.post("/run")
@@ -465,6 +463,15 @@ def _render_credentials(active_path: str, cred_status, kiro_status: str) -> str:
     def badge(key: str) -> str:
         return "✅ set" if cred_status.get(key) else "— not set"
 
+    def clear_button(key: str) -> str:
+        if not cred_status.get(key):
+            return ""
+        return (
+            f'<form method="post" action="/credentials/clear" style="display:inline">'
+            f'<input type="hidden" name="key" value="{_esc(key)}">'
+            f'<button type="submit">Clear</button></form>'
+        )
+
     kiro_label = _KIRO_STATUS_LABEL.get(kiro_status, "— unknown")
 
     body = f"""<h1>Credentials</h1>
@@ -472,23 +479,24 @@ def _render_credentials(active_path: str, cred_status, kiro_status: str) -> str:
    OpenAI (codex): {badge('openai_api_key')} &middot;
    Cursor: {badge('cursor_api_key')}</p>
 <form method="post" action="/credentials">
-  <div class="row"><label>GitHub token</label><input type="password" name="github_token" placeholder="leave blank to keep"></div>
-  <div class="row"><label>OpenAI API key</label><input type="password" name="openai_api_key" placeholder="leave blank to keep"></div>
-  <div class="row"><label>Cursor API key</label><input type="password" name="cursor_api_key" placeholder="leave blank to keep"></div>
+  <div class="row"><label>GitHub token</label><input type="password" name="github_token" placeholder="leave blank to keep"> {clear_button('github_token')}</div>
+  <div class="row"><label>OpenAI API key</label><input type="password" name="openai_api_key" placeholder="leave blank to keep"> {clear_button('openai_api_key')}</div>
+  <div class="row"><label>Cursor API key</label><input type="password" name="cursor_api_key" placeholder="leave blank to keep"> {clear_button('cursor_api_key')}</div>
   <button type="submit">Save credentials</button>
 </form>
-<p><small>Stored privately on the server and never shown back here. Leave a
-field blank to keep its current value; clearing a saved value requires entering
-a single space.</small></p>
+<p><small><strong>Credentials are kept only in memory, never written to
+disk.</strong> They live in the running server's environment, so you must
+re-enter them after every restart. Leave a field blank to keep its current
+value; use <em>Clear</em> to remove one. (Values exported in the shell before
+launch are used automatically.)</small></p>
 
 <h2>Kiro CLI login</h2>
 <p>Kiro CLI status: {_esc(kiro_label)}</p>
 <p><small>Unlike codex and Cursor, <code>kiro-cli</code> cannot authenticate
 with an API key — it uses an interactive device-code login that this web form
-cannot drive. Complete it from a terminal against the running container:</small></p>
+cannot drive. After the container is started, complete it from a terminal:</small></p>
 <pre>docker compose exec health-checker kiro-cli login --use-device-flow</pre>
-<p><small>Follow the printed URL and code to finish. The login is cached under
-the mounted volume, so it persists across restarts. Reload this page to refresh
+<p><small>Follow the printed URL and code to finish. Reload this page to refresh
 the status.</small></p>"""
     return _page("Credentials", active_path, body)
 

@@ -59,13 +59,13 @@ COPY health_checker_agent ./health_checker_agent
 # Seed a default config if the mounted volume doesn't provide one.
 COPY repos.toml.example ./repos.toml.example
 
-# Directories the app reads/writes. Mounted as volumes by docker-compose so
-# generated memos, clones, and credentials survive restarts.
-RUN mkdir -p /app/output /app/secrets
+# Directory the app writes generated memos/clones into (mounted as a volume by
+# docker-compose so output survives restarts). Credentials are never written to
+# disk — they live only in the running process's environment.
+RUN mkdir -p /app/output
 
 # The web UI configuration (paths read by server.py).
 ENV HEALTH_CHECKER_CONFIG=/app/repos.toml \
-    HEALTH_CHECKER_SECRETS_DIR=/app/secrets \
     HEALTH_CHECKER_HOST=0.0.0.0 \
     HEALTH_CHECKER_PORT=8080
 

@@ -10,5 +10,6 @@ venv/
 output/*
 !output/.gitkeep
 
-# Persisted credentials written by the web UI (never commit secrets)
+# Safety net: the app no longer writes credentials to disk (they live only in
+# the process environment), but never commit any stray secrets directory.
 secrets/
