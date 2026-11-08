@@ -52,8 +52,8 @@ to.
 ## Web UI (Docker)
 
 A browser interface is available for driving the whole workflow without the CLI.
-It bundles the AI CLIs (codex and cursor-agent; kiro-cli optionally) in a
-container and serves a dashboard on port 8080.
+It bundles all three AI CLIs (kiro-cli, codex, and cursor-agent) in a container
+and serves a dashboard on port 8080.
 
 ```bash
 docker compose up
@@ -72,23 +72,29 @@ Then open <http://localhost:8080>. From the dashboard you can:
 `docker compose up` bind-mounts `repos.toml`, `output/`, and `secrets/` so your
 config, results, and credentials persist on the host across restarts.
 
-### Bundling kiro-cli in the image
+### Image size: skipping kiro-cli
 
-The image installs `codex` and `cursor-agent` out of the box. `kiro-cli` has no
-publicly pinnable installer URL, so it is opt-in via a build argument — supply
-the install command for your platform:
+All three CLIs are installed by default. The `kiro-cli` binary is large
+(~400 MB) and dominates the image size; if you only use the `codex` or
+`cursor-agent` backends you can skip it:
 
 ```bash
-KIRO_CLI_INSTALL="curl -fsSL <kiro-cli-install-url> | bash" docker compose build
+INSTALL_KIRO_CLI=false docker compose build
 ```
 
 ### Authentication in the container
 
 The GitHub token and the codex (`OPENAI_API_KEY`) and cursor (`CURSOR_API_KEY`)
-keys can be entered in the UI. `kiro-cli` uses an interactive browser/device
-login that does not fit a headless container, so prefer `codex` or
-`cursor-agent` as the backend when running in Docker (or complete a `kiro-cli
-login` inside the container and persist its credential directory).
+keys can be entered in the UI, which is the simplest path in a container.
+`kiro-cli` instead uses a device-code login — run it once inside the running
+container and persist its credential directory:
+
+```bash
+docker compose exec health-checker kiro-cli login --use-device-flow
+```
+
+(Follow the printed URL/code to authenticate.) `codex` also supports
+`codex login --device-auth` for the same purpose.
 
 ### Running the UI without Docker
 

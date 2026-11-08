@@ -11,11 +11,13 @@ FROM python:3.12-slim
 
 # --- base tooling -----------------------------------------------------------
 # git + curl are required by the agent itself (see AGENTS.md). nodejs/npm are
-# needed to install the codex CLI. ca-certificates for TLS.
+# needed to install the codex CLI. unzip is required by the kiro-cli installer.
+# ca-certificates for TLS.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         git \
         curl \
+        unzip \
         ca-certificates \
         nodejs \
         npm \
@@ -31,17 +33,17 @@ RUN npm install -g @openai/codex \
 RUN curl -fsSL https://cursor.com/install | bash
 ENV PATH="/root/.local/bin:${PATH}"
 
-# kiro-cli: there is no publicly scriptable installer URL we can pin here, and
-# the binary is large (~400 MB). Provide its install as an optional build
-# argument so operators who use the kiro-cli backend can supply the command for
-# their platform, e.g.:
-#   docker build --build-arg KIRO_CLI_INSTALL="curl -fsSL <url> | bash" .
-# Left empty by default; the codex and cursor-agent backends work without it.
-ARG KIRO_CLI_INSTALL=""
-RUN if [ -n "$KIRO_CLI_INSTALL" ]; then \
-        sh -c "$KIRO_CLI_INSTALL" && kiro-cli --version; \
+# kiro-cli: official installer. Installs `kiro-cli` under /root/.local/bin
+# (already on PATH above). `--no-modify-path` skips the installer's shell-rc
+# edits, which are pointless in an image. The binary is large (~400 MB), so this
+# layer dominates the image size; set INSTALL_KIRO_CLI=false to skip it when you
+# only use the codex or cursor-agent backends.
+ARG INSTALL_KIRO_CLI=true
+RUN if [ "$INSTALL_KIRO_CLI" = "true" ]; then \
+        curl -fsSL https://cli.kiro.dev/install | bash -s -- --no-modify-path --force \
+        && kiro-cli --version; \
     else \
-        echo "kiro-cli not installed (KIRO_CLI_INSTALL not set); codex and cursor-agent backends are available"; \
+        echo "Skipping kiro-cli install (INSTALL_KIRO_CLI=$INSTALL_KIRO_CLI); codex and cursor-agent backends remain available"; \
     fi
 
 # --- Python application -----------------------------------------------------
