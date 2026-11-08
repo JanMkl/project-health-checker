@@ -110,6 +110,38 @@ logged in / not installed) and the command above, so you can tell at a glance
 whether the login still needs doing. Because the kiro-cli login is not
 persisted either, it must be redone after a restart.
 
+### Generate on the host, serve with the container
+
+You don't have to run the analysis inside the container. Because the container
+and the host share the same `output/` directory (it's bind-mounted), you can
+split the two jobs:
+
+- **Generate the reports on the host** with the CLI, where your credentials and
+  AI-CLI logins already live in your shell — no need to re-enter anything in the
+  browser:
+
+  ```bash
+  # one-off: install the package (CLI only needs the base deps)
+  .venv/bin/python -m pip install -e .
+
+  # run the full analysis and build the deck; writes into output/
+  .venv/bin/python -m health_checker_agent --config repos.toml --pptx
+  ```
+
+- **Use the container only to browse and download** the results. Everything the
+  host wrote to `output/` shows up on the Memos & Presentation page, so the
+  container becomes a lightweight viewer:
+
+  ```bash
+  docker compose up
+  ```
+
+This is handy when you'd rather keep credential setup on your own machine (where
+`kiro-cli login`, `OPENAI_API_KEY`, etc. are already configured) while still
+getting easy browser access to the memos, fleet report, and PowerPoint deck. The
+container's **Run analysis** page still works too; this just gives you the option
+not to use it.
+
 ### Running the UI without Docker
 
 ```bash
