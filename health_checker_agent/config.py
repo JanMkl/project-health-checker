@@ -109,3 +109,46 @@ def load_config(path: str) -> Config:
     except FileNotFoundError as exc:
         raise ConfigError(f"Config file not found: {path}") from exc
     return parse_config(raw)
+
+
+def _toml_escape(value: str) -> str:
+    """Escape a string for a TOML basic (double-quoted) string."""
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def dump_config(config: Config) -> str:
+    """Serialise a :class:`Config` back to TOML text.
+
+    The output round-trips through :func:`parse_config`. Repos are written one
+    per line for a readable, diff-friendly file (the web UI edits this file).
+    """
+    lines: List[str] = [f'since = "{_toml_escape(config.since)}"']
+    if config.until is not None:
+        lines.append(f'until = "{_toml_escape(config.until)}"')
+    lines.append(f'work_dir = "{_toml_escape(config.work_dir)}"')
+    lines.append(f'output_dir = "{_toml_escape(config.output_dir)}"')
+    lines.append(f'backend = "{_toml_escape(config.backend)}"')
+    lines.append("repos = [")
+    for repo in config.repos:
+        lines.append(f'    "{_toml_escape(repo)}",')
+    lines.append("]")
+    return "\n".join(lines) + "\n"
+
+
+def save_config(path: str, config: Config) -> None:
+    """Validate and write ``config`` to ``path`` as TOML.
+
+    Re-parses the serialised form first so an invalid config can never be
+    persisted.
+    """
+    text = dump_config(config)
+    parse_config(text)  # guard: never write something we cannot read back
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text)
+
+
+def with_repos(config: Config, repos: List[str]) -> Config:
+    """Return a copy of ``config`` with its repo list replaced."""
+    from dataclasses import replace
+
+    return replace(config, repos=list(repos))

@@ -4,5 +4,12 @@
 # PowerPoint export (`--pptx`) additionally needs python-pptx.
 python-pptx==1.0.2
 
+# Web UI (FastAPI interface served on port 8080). python-multipart is required
+# by FastAPI to parse the HTML form submissions.
+fastapi==0.115.5
+uvicorn==0.32.1
+python-multipart==0.0.17
+
 # Development / testing dependencies
 pytest==8.3.3
+httpx==0.28.1  # required by fastapi.testclient (Starlette TestClient)

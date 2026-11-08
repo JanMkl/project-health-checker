@@ -8,6 +8,13 @@ dependencies = []
 [project.optional-dependencies]
 # Required only for the optional PowerPoint export (`--pptx`).
 pptx = ["python-pptx>=1.0"]
+# Required only for the web UI (`health_checker_agent.server`).
+web = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "python-multipart>=0.0.17",
+    "python-pptx>=1.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

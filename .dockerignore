@@ -1,0 +1,10 @@
+# Keep the build context small and avoid copying host-only or generated state.
+.git
+.venv
+.pytest_cache
+**/__pycache__
+output
+secrets
+*.egg-info
+*.pyc
+.DS_Store

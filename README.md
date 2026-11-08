@@ -49,6 +49,54 @@ All memos, reports, state files, and repository clones are written under the
 `output/` directory, which is the only location the agent is permitted to write
 to.
 
+## Web UI (Docker)
+
+A browser interface is available for driving the whole workflow without the CLI.
+It bundles the AI CLIs (codex and cursor-agent; kiro-cli optionally) in a
+container and serves a dashboard on port 8080.
+
+```bash
+docker compose up
+```
+
+Then open <http://localhost:8080>. From the dashboard you can:
+
+- edit the repositories to analyse (add/remove, persisted to `repos.toml`),
+- set the analysis window and backend,
+- enter the GitHub token and AI-tool API keys (stored under `secrets/`, never
+  shown back in the browser),
+- (re-)run the analysis (runs in the background; the page shows progress),
+- browse the generated memos, and
+- download the PowerPoint deck.
+
+`docker compose up` bind-mounts `repos.toml`, `output/`, and `secrets/` so your
+config, results, and credentials persist on the host across restarts.
+
+### Bundling kiro-cli in the image
+
+The image installs `codex` and `cursor-agent` out of the box. `kiro-cli` has no
+publicly pinnable installer URL, so it is opt-in via a build argument — supply
+the install command for your platform:
+
+```bash
+KIRO_CLI_INSTALL="curl -fsSL <kiro-cli-install-url> | bash" docker compose build
+```
+
+### Authentication in the container
+
+The GitHub token and the codex (`OPENAI_API_KEY`) and cursor (`CURSOR_API_KEY`)
+keys can be entered in the UI. `kiro-cli` uses an interactive browser/device
+login that does not fit a headless container, so prefer `codex` or
+`cursor-agent` as the backend when running in Docker (or complete a `kiro-cli
+login` inside the container and persist its credential directory).
+
+### Running the UI without Docker
+
+```bash
+.venv/bin/python -m pip install -e .[web]
+.venv/bin/python -m health_checker_agent.server   # serves on 0.0.0.0:8080
+```
+
 ## Requirements
 
 - Python 3.10+

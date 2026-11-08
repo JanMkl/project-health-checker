@@ -1,0 +1,36 @@
+# Project Health Checker — container orchestration.
+#
+# Start the web UI on http://localhost:8080 with:
+#
+#     docker compose up
+#
+# The service builds the image from the local Dockerfile and persists its
+# config, generated output, and credentials via bind mounts so they survive
+# container restarts and are visible on the host.
+
+services:
+  health-checker:
+    build:
+      context: .
+      # To bundle kiro-cli as well, pass its platform install command, e.g.:
+      #   args:
+      #     KIRO_CLI_INSTALL: "curl -fsSL <kiro-cli-install-url> | bash"
+      args:
+        KIRO_CLI_INSTALL: "${KIRO_CLI_INSTALL:-}"
+    image: health-checker-agent
+    ports:
+      - "8080:8080"
+    environment:
+      HEALTH_CHECKER_CONFIG: /app/repos.toml
+      HEALTH_CHECKER_SECRETS_DIR: /app/secrets
+      HEALTH_CHECKER_HOST: 0.0.0.0
+      HEALTH_CHECKER_PORT: "8080"
+    volumes:
+      # The repo list the UI edits. Seeded from repos.toml.example on first run
+      # if absent.
+      - ./repos.toml:/app/repos.toml
+      # Generated memos, fleet report, pptx, and repo clones.
+      - ./output:/app/output
+      # Persisted credentials (GitHub token, AI CLI API keys). Keep private.
+      - ./secrets:/app/secrets
+    restart: unless-stopped

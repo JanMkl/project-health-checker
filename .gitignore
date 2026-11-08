@@ -9,3 +9,6 @@ venv/
 # Generated memos (keep the directory, ignore its contents)
 output/*
 !output/.gitkeep
+
+# Persisted credentials written by the web UI (never commit secrets)
+secrets/

@@ -2,7 +2,14 @@ import os
 import tempfile
 import unittest
 
-from health_checker_agent.config import ConfigError, load_config, parse_config
+from health_checker_agent.config import (
+    ConfigError,
+    dump_config,
+    load_config,
+    parse_config,
+    save_config,
+    with_repos,
+)
 
 
 class ParseConfigTests(unittest.TestCase):
@@ -69,6 +76,46 @@ class LoadConfigTests(unittest.TestCase):
                 fh.write('since = "x"\nrepos = ["o/a"]\n')
             cfg = load_config(path)
             self.assertEqual(cfg.repos, ["o/a"])
+
+
+class DumpAndSaveConfigTests(unittest.TestCase):
+    def test_dump_round_trips(self):
+        cfg = parse_config(
+            'since = "90 days ago"\n'
+            'until = "2026-11-01"\n'
+            'backend = "codex"\n'
+            'repos = ["o/a", "o/b"]\n'
+        )
+        reparsed = parse_config(dump_config(cfg))
+        self.assertEqual(reparsed.repos, ["o/a", "o/b"])
+        self.assertEqual(reparsed.since, "90 days ago")
+        self.assertEqual(reparsed.until, "2026-11-01")
+        self.assertEqual(reparsed.backend, "codex")
+
+    def test_dump_omits_until_when_none(self):
+        cfg = parse_config('since = "x"\nrepos = ["o/a"]\n')
+        self.assertNotIn("until", dump_config(cfg))
+
+    def test_save_config_writes_and_reloads(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "repos.toml")
+            cfg = parse_config('since = "x"\nrepos = ["o/a"]\n')
+            save_config(path, with_repos(cfg, ["o/a", "o/b", "o/c"]))
+            self.assertEqual(load_config(path).repos, ["o/a", "o/b", "o/c"])
+
+    def test_with_repos_replaces_list(self):
+        cfg = parse_config('since = "x"\nrepos = ["o/a"]\n')
+        self.assertEqual(with_repos(cfg, ["o/b", "o/c"]).repos, ["o/b", "o/c"])
+        # Original is unchanged (frozen dataclass copy).
+        self.assertEqual(cfg.repos, ["o/a"])
+
+    def test_save_escapes_special_characters(self):
+        # A value containing a quote must round-trip safely.
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "repos.toml")
+            cfg = parse_config('since = "a \\" b"\nrepos = ["o/a"]\n')
+            save_config(path, cfg)
+            self.assertEqual(load_config(path).since, 'a " b')
 
 
 if __name__ == "__main__":
