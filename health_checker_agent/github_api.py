@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from typing import Any, List
 
 from .commands import run_command
@@ -73,7 +74,16 @@ def fetch_list(
 
     args.append(url)
 
-    result = run_command(args, timeout=timeout)
+    try:
+        result = run_command(args, timeout=timeout)
+    except subprocess.CalledProcessError as exc:
+        # The command's argv carries the "Authorization: Bearer <token>" header;
+        # letting the raw CalledProcessError propagate would leak the token into
+        # error messages and reports. Raise a clean, token-free error instead.
+        raise GitHubApiError(
+            f"GitHub API request for {repo} failed "
+            f"(curl exit {exc.returncode})"
+        ) from None
     return _parse_list(result.stdout, repo=repo)
 
 

@@ -240,6 +240,41 @@ class MemoBrowseTests(WebAppTestBase):
         self.assertIn("Hello memo", r.text)
         self.assertIn("Some content.", r.text)
 
+    def test_fleet_report_highlighted_and_first(self):
+        # Seed a per-repo memo and the fleet report.
+        with open(os.path.join(self.output_dir, "o__a-memo.md"), "w") as fh:
+            fh.write("# memo a\n")
+        with open(os.path.join(self.output_dir, "fleet-report.md"), "w") as fh:
+            fh.write("# Fleet Health Report\n- **o/a** [memo](o__a-memo.md)\n")
+
+        page = self.client.get("/").text
+        # The fleet report gets a highlighted link.
+        self.assertIn('class="highlight"', page)
+        self.assertIn("/memos/fleet-report.md", page)
+        self.assertIn("Fleet report", page)
+        # It is placed above the per-project memo list.
+        self.assertLess(
+            page.index("fleet-report.md"), page.index("o__a-memo.md")
+        )
+
+    def test_fleet_report_absent_shows_placeholder(self):
+        page = self.client.get("/").text
+        self.assertIn("No fleet report yet", page)
+
+    def test_fleet_report_is_viewable(self):
+        with open(os.path.join(self.output_dir, "fleet-report.md"), "w") as fh:
+            fh.write("# Fleet Health Report\n\nSummary line.\n")
+        r = self.client.get("/memos/fleet-report.md")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Fleet Health Report", r.text)
+
+    def test_fleet_report_local_links_are_clickable(self):
+        with open(os.path.join(self.output_dir, "fleet-report.md"), "w") as fh:
+            fh.write("- **o/a** [memo](o__a-memo.md)\n")
+        r = self.client.get("/memos/fleet-report.md")
+        # The relative markdown link becomes a navigable /memos/ anchor.
+        self.assertIn('<a href="/memos/o__a-memo.md">memo</a>', r.text)
+
     def test_missing_memo_404(self):
         r = self.client.get("/memos/does-not-exist-memo.md")
         self.assertEqual(r.status_code, 404)

@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import html
 import os
+import re
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -171,7 +172,12 @@ def create_app(
     @app.get("/", response_class=HTMLResponse)
     def memos_page() -> str:
         output_dir = _output_dir()
-        return _render_memos("/", _list_memos(output_dir), _pptx_exists(output_dir))
+        return _render_memos(
+            "/",
+            _list_memos(output_dir),
+            _pptx_exists(output_dir),
+            _fleet_report_exists(output_dir),
+        )
 
     @app.get("/repositories", response_class=HTMLResponse)
     def repositories_page() -> str:
@@ -313,6 +319,13 @@ def _pptx_exists(output_dir: str) -> bool:
     return os.path.exists(os.path.join(output_dir, "fleet-summary.pptx"))
 
 
+FLEET_REPORT_NAME = "fleet-report.md"
+
+
+def _fleet_report_exists(output_dir: str) -> bool:
+    return os.path.exists(os.path.join(output_dir, FLEET_REPORT_NAME))
+
+
 # --- rendering ----------------------------------------------------------
 
 
@@ -329,6 +342,8 @@ _STYLE = """
  .status.error { background: #f6ecec; border-color: #e0b4b4; }
  .status.running { background: #eef3f8; border-color: #bcd3e6; }
  .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+ .highlight { padding: .7rem .9rem; border-radius: 6px; background: #eef3f8; border: 1px solid #bcd3e6; }
+ .highlight a { font-size: 1.05rem; }
  label { display: inline-block; min-width: 7rem; }
  pre { white-space: pre-wrap; word-wrap: break-word; background: #f7f8fa; padding: .6rem .8rem; border-radius: 6px; border: 1px solid #e3e6ea; }
  nav { background: #1f2a37; margin-bottom: 1.5rem; border-radius: 0 0 6px 6px; }
@@ -360,13 +375,27 @@ def _page(title: str, active_path: str, body: str) -> str:
 </body></html>"""
 
 
-def _render_memos(active_path: str, memos, pptx_ready) -> str:
+def _render_memos(active_path: str, memos, pptx_ready, fleet_report_ready=False) -> str:
+    # The fleet report is the roll-up that links to every per-repo memo, so it
+    # gets a highlighted section of its own above the per-repo list.
+    if fleet_report_ready:
+        fleet_section = (
+            f'<div class="highlight">'
+            f'<a href="/memos/{_esc(FLEET_REPORT_NAME)}"><strong>'
+            f"\U0001f4cb Fleet report</strong></a> — the fleet-wide roll-up "
+            f"linking every project's memo.</div>"
+        )
+    else:
+        fleet_section = (
+            "<p><em>No fleet report yet. Run the analysis.</em></p>"
+        )
+
     if memos:
         memo_rows = "".join(
             f'<li><a href="/memos/{_esc(m)}">{_esc(m)}</a></li>' for m in memos
         )
     else:
-        memo_rows = "<li><em>No memos yet. Run the analysis.</em></li>"
+        memo_rows = "<li><em>No per-project memos yet. Run the analysis.</em></li>"
 
     pptx_section = (
         '<a href="/download/pptx"><button>Download fleet-summary.pptx</button></a>'
@@ -375,7 +404,9 @@ def _render_memos(active_path: str, memos, pptx_ready) -> str:
     )
 
     body = f"""<h1>Memos &amp; Presentation</h1>
-<h2>Memos</h2>
+<h2>Fleet report</h2>
+{fleet_section}
+<h2>Project memos</h2>
 <ul>{memo_rows}</ul>
 <h2>Presentation</h2>
 <p>{pptx_section}</p>"""
@@ -482,9 +513,33 @@ the live JSON at <a href="/status">/status</a>.</small></p>"""
     return _page("Run analysis", active_path, body)
 
 
+# Markdown link to a sibling .md file, e.g. "[memo](owner__name-memo.md)".
+# Matched against the HTML-escaped content, so the target is a bare relative
+# filename (no scheme, no slash) ending in .md.
+_LOCAL_MD_LINK = re.compile(r"\[([^\]]+)\]\((?!https?:|/)([^)\s]+\.md)\)")
+
+
+def _linkify_local_md(escaped: str) -> str:
+    """Turn ``[text](local.md)`` references into clickable ``/memos/`` links.
+
+    Operates on already-HTML-escaped text. Only sibling ``.md`` files are
+    linked (not absolute URLs), so the fleet report's links to each per-repo
+    memo become navigable from the browser.
+    """
+
+    def repl(m: re.Match) -> str:
+        text, target = m.group(1), m.group(2)
+        return f'<a href="/memos/{_esc(target)}">{text}</a>'
+
+    return _LOCAL_MD_LINK.sub(repl, escaped)
+
+
 def _render_memo(active_path: str, name: str, content: str) -> str:
     # Memo view keeps the nav; it belongs under the Memos & Presentation tab.
+    # Make local markdown links (notably the fleet report's per-repo memo links)
+    # clickable, while leaving all other text escaped.
+    rendered = _linkify_local_md(_esc(content))
     body = f"""<p><a href="/">&larr; Back to memos</a></p>
 <h1>{_esc(name)}</h1>
-<pre>{_esc(content)}</pre>"""
+<pre>{rendered}</pre>"""
     return _page(name, active_path, body)

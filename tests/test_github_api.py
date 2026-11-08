@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import unittest
 from unittest import mock
 
@@ -50,6 +51,29 @@ class FetchListTests(unittest.TestCase):
     def test_empty_body_is_empty_list(self, mock_run):
         mock_run.return_value = CommandResult(0, "", "")
         self.assertEqual(fetch_list("https://example/x", repo="o/r"), [])
+
+    @mock.patch(RUN_COMMAND)
+    def test_curl_failure_does_not_leak_token(self, mock_run):
+        # The failing command's argv carries the Authorization header with the
+        # token; the raised error must not expose it.
+        argv = [
+            "curl",
+            "--header",
+            "Authorization: Bearer github_pat_SUPERSECRET",
+            "https://api.github.com/repos/o/r/pulls",
+        ]
+        mock_run.side_effect = subprocess.CalledProcessError(22, argv, "", "")
+        with self.assertRaises(GitHubApiError) as ctx:
+            fetch_list(
+                "https://api.github.com/repos/o/r/pulls",
+                repo="o/r",
+                token="github_pat_SUPERSECRET",
+            )
+        msg = str(ctx.exception)
+        self.assertNotIn("github_pat_SUPERSECRET", msg)
+        self.assertNotIn("Bearer", msg)
+        self.assertIn("o/r", msg)
+        self.assertIn("22", msg)
 
 
 if __name__ == "__main__":
