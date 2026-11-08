@@ -5,10 +5,12 @@
 python-pptx==1.0.2
 
 # Web UI (FastAPI interface served on port 8080). python-multipart is required
-# by FastAPI to parse the HTML form submissions.
+# by FastAPI to parse the HTML form submissions; markdown renders the memos as
+# formatted HTML in the browser.
 fastapi==0.115.5
 uvicorn==0.32.1
 python-multipart==0.0.17
+markdown==3.11.3
 
 # Development / testing dependencies
 pytest==8.3.3

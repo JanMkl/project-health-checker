@@ -280,6 +280,22 @@ class MemoBrowseTests(WebAppTestBase):
         self.assertIn("Hello memo", r.text)
         self.assertIn("Some content.", r.text)
 
+    def test_memo_rendered_as_formatted_html(self):
+        memo_path = os.path.join(self.output_dir, "o__a-memo.md")
+        with open(memo_path, "w", encoding="utf-8") as fh:
+            fh.write(
+                "# Title\n\n## Executive Summary\n\n"
+                "**Active** project with `helm` work.\n\n- one\n- two\n"
+            )
+        r = self.client.get("/memos/o__a-memo.md").text
+        # Markdown is rendered to HTML elements, not dumped as raw text.
+        self.assertIn("<h2>Executive Summary</h2>", r)
+        self.assertIn("<strong>Active</strong>", r)
+        self.assertIn("<code>helm</code>", r)
+        self.assertIn("<li>one</li>", r)
+        # The raw markdown markers are not shown verbatim in the body.
+        self.assertNotIn("## Executive Summary", r)
+
     def test_fleet_report_highlighted_and_first(self):
         # Seed a per-repo memo and the fleet report.
         with open(os.path.join(self.output_dir, "o__a-memo.md"), "w") as fh:

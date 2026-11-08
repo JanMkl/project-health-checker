@@ -61,8 +61,8 @@ docker compose up
 
 Then open <http://localhost:8080>. A navigation bar links the pages:
 
-- **Memos & Presentation** (the default page) — browse the generated memos and
-  download the PowerPoint deck.
+- **Memos & Presentation** (the default page) — browse the generated memos
+  (rendered from Markdown to formatted HTML) and download the PowerPoint deck.
 - **Repositories** — add/remove the repositories to analyse (persisted to
   `repos.toml`).
 - **Settings** — set the analysis window (`since`/`until`) and the backend.

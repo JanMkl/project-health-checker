@@ -344,6 +344,14 @@ _STYLE = """
  .highlight a { font-size: 1.05rem; }
  label { display: inline-block; min-width: 7rem; }
  pre { white-space: pre-wrap; word-wrap: break-word; background: #f7f8fa; padding: .6rem .8rem; border-radius: 6px; border: 1px solid #e3e6ea; }
+ .memo { line-height: 1.55; }
+ .memo h1 { font-size: 1.5rem; } .memo h2 { font-size: 1.2rem; margin-top: 1.6rem; }
+ .memo h3 { font-size: 1.05rem; margin-top: 1.2rem; border: 0; }
+ .memo ul, .memo ol { padding-left: 1.4rem; } .memo li { display: list-item; padding: .1rem 0; }
+ .memo code { background: #f0f2f5; padding: .1rem .3rem; border-radius: 4px; font-size: .9em; }
+ .memo pre { white-space: pre-wrap; } .memo pre code { background: none; padding: 0; }
+ .memo table { border-collapse: collapse; margin: 1rem 0; } .memo th, .memo td { border: 1px solid #d7dbe0; padding: .35rem .6rem; text-align: left; }
+ .memo blockquote { margin: 1rem 0; padding: .3rem 1rem; border-left: 4px solid #bcd3e6; color: #444; }
  nav { background: #1f2a37; margin-bottom: 1.5rem; border-radius: 0 0 6px 6px; }
  nav .inner { max-width: 860px; margin: 0 auto; padding: 0 1rem; display: flex; gap: .25rem; flex-wrap: wrap; }
  nav a { color: #cdd5df; text-decoration: none; padding: .7rem .8rem; display: inline-block; font-size: .95rem; }
@@ -521,33 +529,44 @@ the live JSON at <a href="/status">/status</a>.</small></p>"""
     return _page("Run analysis", active_path, body)
 
 
-# Markdown link to a sibling .md file, e.g. "[memo](owner__name-memo.md)".
-# Matched against the HTML-escaped content, so the target is a bare relative
-# filename (no scheme, no slash) ending in .md.
-_LOCAL_MD_LINK = re.compile(r"\[([^\]]+)\]\((?!https?:|/)([^)\s]+\.md)\)")
+# A relative .md href in rendered HTML, e.g. href="owner__name-memo.md".
+# Absolute URLs (http(s):// or starting with /) are left untouched.
+_RELATIVE_MD_HREF = re.compile(r'href="(?!https?:|/|#)([^"]+\.md)"')
 
 
-def _linkify_local_md(escaped: str) -> str:
-    """Turn ``[text](local.md)`` references into clickable ``/memos/`` links.
+def _render_markdown(content: str) -> str:
+    """Render memo Markdown to HTML for display.
 
-    Operates on already-HTML-escaped text. Only sibling ``.md`` files are
-    linked (not absolute URLs), so the fleet report's links to each per-repo
-    memo become navigable from the browser.
+    Uses the ``markdown`` library (headings, lists, tables, emphasis, fenced
+    code) when available and rewrites relative ``*.md`` links to ``/memos/`` so
+    the fleet report's per-repo links stay navigable. Falls back to escaped
+    pre-formatted text when the optional dependency is not installed, so the
+    core agent keeps working without the web extra.
     """
+    try:
+        import markdown as _markdown
+    except ImportError:
+        escaped = _esc(content)
+        # Preserve the earlier behaviour: make local .md links clickable even
+        # in the plain-text fallback.
+        escaped = re.sub(
+            r"\[([^\]]+)\]\((?!https?:|/)([^)\s]+\.md)\)",
+            lambda m: f'<a href="/memos/{_esc(m.group(2))}">{m.group(1)}</a>',
+            escaped,
+        )
+        return f"<pre>{escaped}</pre>"
 
-    def repl(m: re.Match) -> str:
-        text, target = m.group(1), m.group(2)
-        return f'<a href="/memos/{_esc(target)}">{text}</a>'
-
-    return _LOCAL_MD_LINK.sub(repl, escaped)
+    html_body = _markdown.markdown(
+        content, extensions=["extra", "sane_lists", "nl2br"]
+    )
+    # Point relative links to other memos/reports at the /memos/ route.
+    return _RELATIVE_MD_HREF.sub(r'href="/memos/\1"', html_body)
 
 
 def _render_memo(active_path: str, name: str, content: str) -> str:
     # Memo view keeps the nav; it belongs under the Memos & Presentation tab.
-    # Make local markdown links (notably the fleet report's per-repo memo links)
-    # clickable, while leaving all other text escaped.
-    rendered = _linkify_local_md(_esc(content))
+    rendered = _render_markdown(content)
     body = f"""<p><a href="/">&larr; Back to memos</a></p>
 <h1>{_esc(name)}</h1>
-<pre>{rendered}</pre>"""
+<article class="memo">{rendered}</article>"""
     return _page(name, active_path, body)
