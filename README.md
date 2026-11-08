@@ -95,6 +95,10 @@ container and persist its credential directory:
 docker compose exec health-checker kiro-cli login --use-device-flow
 ```
 
+The Credentials page shows the current kiro-cli login status (logged in / not
+logged in / not installed) and this same command, so you can tell at a glance
+whether the device login still needs to be done.
+
 (Follow the printed URL/code to authenticate.) `codex` also supports
 `codex login --device-auth` for the same purpose.
 

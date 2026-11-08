@@ -174,3 +174,35 @@ def get_backend(name: str) -> Backend:
             f"Unknown backend {name!r}. Supported backends: "
             f"{', '.join(SUPPORTED_BACKENDS)}."
         ) from None
+
+
+# kiro-cli login status values (also used as UI badge keys).
+KIRO_LOGGED_IN = "logged_in"
+KIRO_LOGGED_OUT = "logged_out"
+KIRO_NOT_INSTALLED = "not_installed"
+KIRO_UNKNOWN = "unknown"
+
+
+def kiro_login_status(timeout: float | None = 15) -> str:
+    """Report whether kiro-cli is authenticated.
+
+    Unlike codex/cursor, kiro-cli does not authenticate via an environment
+    variable; it uses an interactive device-code login whose result is cached.
+    We probe that cache with ``kiro-cli whoami``, which exits 0 when logged in
+    and non-zero (printing "Not logged in") otherwise.
+
+    Returns one of :data:`KIRO_LOGGED_IN`, :data:`KIRO_LOGGED_OUT`,
+    :data:`KIRO_NOT_INSTALLED` (binary absent), or :data:`KIRO_UNKNOWN` (the
+    check could not be completed).
+    """
+    # Imported here to avoid a module-level import cycle (commands imports this
+    # module for the allow-list).
+    from .commands import run_command
+
+    try:
+        result = run_command(["kiro-cli", "whoami"], timeout=timeout, check=False)
+    except FileNotFoundError:
+        return KIRO_NOT_INSTALLED
+    except Exception:  # noqa: BLE001 - any probe failure is "unknown", never fatal
+        return KIRO_UNKNOWN
+    return KIRO_LOGGED_IN if result.returncode == 0 else KIRO_LOGGED_OUT

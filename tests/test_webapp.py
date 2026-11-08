@@ -38,10 +38,14 @@ class WebAppTestBase(unittest.TestCase):
             self.run_calls.append({"config": config, "force": force, "pptx": pptx})
 
         self.fake_run_fleet = fake_run_fleet
+        # Inject a stub kiro-cli status so tests never shell out. Individual
+        # tests can rebuild the app with a different status.
+        self.kiro_status = "logged_out"
         self.app = create_app(
             config_path=self.config_path,
             credentials_dir=self.secrets_dir,
             run_fleet_fn=fake_run_fleet,
+            kiro_status_fn=lambda: self.kiro_status,
         )
         # Do not auto-follow 303 redirects so we can assert them.
         self.client = TestClient(self.app, follow_redirects=False)
@@ -181,6 +185,38 @@ class CredentialTests(WebAppTestBase):
         page = self.client.get("/credentials").text
         self.assertNotIn("ghp_secret123", page)
         self.assertIn("set", page)  # a "✅ set" badge is present
+
+    def test_kiro_status_shown_on_credentials_page(self):
+        from health_checker_agent.backends import (
+            KIRO_LOGGED_IN,
+            KIRO_LOGGED_OUT,
+            KIRO_NOT_INSTALLED,
+        )
+
+        cases = {
+            KIRO_LOGGED_IN: "logged in",
+            KIRO_LOGGED_OUT: "not logged in",
+            KIRO_NOT_INSTALLED: "not installed",
+        }
+        for status_value, expected in cases.items():
+            app = create_app(
+                config_path=self.config_path,
+                credentials_dir=self.secrets_dir,
+                run_fleet_fn=self.fake_run_fleet,
+                kiro_status_fn=lambda sv=status_value: sv,
+            )
+            page = TestClient(app).get("/credentials").text
+            self.assertIn("Kiro CLI status:", page)
+            self.assertIn(expected, page)
+
+    def test_credentials_page_shows_device_login_command(self):
+        page = self.client.get("/credentials").text
+        self.assertIn(
+            "docker compose exec health-checker kiro-cli login --use-device-flow",
+            page,
+        )
+        # The note explains kiro-cli cannot use an API key.
+        self.assertIn("device-code login", page)
 
     def tearDown(self):
         # Avoid leaking test credentials into other tests' environment.

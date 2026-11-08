@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 
 from health_checker_agent.backends import (
     BACKEND_COMMANDS,
@@ -6,9 +7,14 @@ from health_checker_agent.backends import (
     CURSOR,
     DEFAULT_BACKEND,
     KIRO,
+    KIRO_LOGGED_IN,
+    KIRO_LOGGED_OUT,
+    KIRO_NOT_INSTALLED,
+    KIRO_UNKNOWN,
     SUPPORTED_BACKENDS,
     UnknownBackendError,
     get_backend,
+    kiro_login_status,
 )
 
 
@@ -146,6 +152,48 @@ class CodexBackendRunTests(unittest.TestCase):
         get_backend(CODEX).generate("PROMPT", runner, 300)
         # The temp file is removed after the memo is read.
         self.assertFalse(os.path.exists(seen_path["path"]))
+
+
+class KiroLoginStatusTests(unittest.TestCase):
+    def test_logged_in_when_whoami_exits_zero(self):
+        with mock.patch(
+            "health_checker_agent.commands.run_command",
+            return_value=_FakeResult(stdout="Logged in", returncode=0),
+        ):
+            self.assertEqual(kiro_login_status(), KIRO_LOGGED_IN)
+
+    def test_logged_out_when_whoami_exits_nonzero(self):
+        with mock.patch(
+            "health_checker_agent.commands.run_command",
+            return_value=_FakeResult(stdout="Not logged in", returncode=1),
+        ):
+            self.assertEqual(kiro_login_status(), KIRO_LOGGED_OUT)
+
+    def test_not_installed_when_binary_missing(self):
+        with mock.patch(
+            "health_checker_agent.commands.run_command",
+            side_effect=FileNotFoundError(),
+        ):
+            self.assertEqual(kiro_login_status(), KIRO_NOT_INSTALLED)
+
+    def test_unknown_on_other_errors(self):
+        with mock.patch(
+            "health_checker_agent.commands.run_command",
+            side_effect=RuntimeError("boom"),
+        ):
+            self.assertEqual(kiro_login_status(), KIRO_UNKNOWN)
+
+    def test_probes_kiro_cli_whoami(self):
+        with mock.patch(
+            "health_checker_agent.commands.run_command",
+            return_value=_FakeResult(returncode=0),
+        ) as m:
+            kiro_login_status()
+        args = m.call_args.args[0]
+        self.assertEqual(args, ["kiro-cli", "whoami"])
+        # Probed non-fatally (check=False) so a logged-out exit code is not an
+        # exception.
+        self.assertFalse(m.call_args.kwargs["check"])
 
 
 if __name__ == "__main__":

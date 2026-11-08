@@ -37,7 +37,13 @@ from typing import Optional
 from fastapi import FastAPI, Form, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
-from .backends import SUPPORTED_BACKENDS
+from .backends import (
+    KIRO_LOGGED_IN,
+    KIRO_LOGGED_OUT,
+    KIRO_NOT_INSTALLED,
+    SUPPORTED_BACKENDS,
+    kiro_login_status,
+)
 from .config import (
     Config,
     ConfigError,
@@ -85,6 +91,7 @@ def create_app(
     config_path: str = DEFAULT_CONFIG_PATH,
     credentials_dir: str = DEFAULT_CREDENTIALS_DIR,
     run_fleet_fn=None,
+    kiro_status_fn=None,
 ) -> FastAPI:
     """Build the FastAPI application.
 
@@ -93,9 +100,14 @@ def create_app(
         credentials_dir: Directory for the persisted credential store.
         run_fleet_fn: Injectable analysis runner (defaults to
             :func:`agent.run_fleet`). Tests pass a stub.
+        kiro_status_fn: Injectable kiro-cli login-status probe (defaults to
+            :func:`backends.kiro_login_status`). Tests pass a stub so they do
+            not shell out.
     """
     if run_fleet_fn is None:
         from .agent import run_fleet as run_fleet_fn  # lazy to ease testing
+    if kiro_status_fn is None:
+        kiro_status_fn = kiro_login_status
 
     creds = CredentialStore(credentials_dir)
     # Apply any previously-stored credentials to the environment on startup.
@@ -171,7 +183,9 @@ def create_app(
 
     @app.get("/credentials", response_class=HTMLResponse)
     def credentials_page() -> str:
-        return _render_credentials("/credentials", creds.status())
+        return _render_credentials(
+            "/credentials", creds.status(), kiro_status_fn()
+        )
 
     @app.get("/run", response_class=HTMLResponse)
     def run_page() -> str:
@@ -316,6 +330,7 @@ _STYLE = """
  .status.running { background: #eef3f8; border-color: #bcd3e6; }
  .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
  label { display: inline-block; min-width: 7rem; }
+ pre { white-space: pre-wrap; word-wrap: break-word; background: #f7f8fa; padding: .6rem .8rem; border-radius: 6px; border: 1px solid #e3e6ea; }
  nav { background: #1f2a37; margin-bottom: 1.5rem; border-radius: 0 0 6px 6px; }
  nav .inner { max-width: 860px; margin: 0 auto; padding: 0 1rem; display: flex; gap: .25rem; flex-wrap: wrap; }
  nav a { color: #cdd5df; text-decoration: none; padding: .7rem .8rem; display: inline-block; font-size: .95rem; }
@@ -408,9 +423,18 @@ def _render_settings(active_path: str, config) -> str:
     return _page("Settings", active_path, body)
 
 
-def _render_credentials(active_path: str, cred_status) -> str:
+_KIRO_STATUS_LABEL = {
+    KIRO_LOGGED_IN: "✅ logged in",
+    KIRO_LOGGED_OUT: "— not logged in",
+    KIRO_NOT_INSTALLED: "— not installed",
+}
+
+
+def _render_credentials(active_path: str, cred_status, kiro_status: str) -> str:
     def badge(key: str) -> str:
         return "✅ set" if cred_status.get(key) else "— not set"
+
+    kiro_label = _KIRO_STATUS_LABEL.get(kiro_status, "— unknown")
 
     body = f"""<h1>Credentials</h1>
 <p>GitHub token: {badge('github_token')} &middot;
@@ -424,7 +448,17 @@ def _render_credentials(active_path: str, cred_status) -> str:
 </form>
 <p><small>Stored privately on the server and never shown back here. Leave a
 field blank to keep its current value; clearing a saved value requires entering
-a single space.</small></p>"""
+a single space.</small></p>
+
+<h2>Kiro CLI login</h2>
+<p>Kiro CLI status: {_esc(kiro_label)}</p>
+<p><small>Unlike codex and Cursor, <code>kiro-cli</code> cannot authenticate
+with an API key — it uses an interactive device-code login that this web form
+cannot drive. Complete it from a terminal against the running container:</small></p>
+<pre>docker compose exec health-checker kiro-cli login --use-device-flow</pre>
+<p><small>Follow the printed URL and code to finish. The login is cached under
+the mounted volume, so it persists across restarts. Reload this page to refresh
+the status.</small></p>"""
     return _page("Credentials", active_path, body)
 
 
@@ -449,13 +483,8 @@ the live JSON at <a href="/status">/status</a>.</small></p>"""
 
 
 def _render_memo(active_path: str, name: str, content: str) -> str:
+    # Memo view keeps the nav; it belongs under the Memos & Presentation tab.
     body = f"""<p><a href="/">&larr; Back to memos</a></p>
 <h1>{_esc(name)}</h1>
 <pre>{_esc(content)}</pre>"""
-    # Memo view keeps the nav; it belongs under the Memos & Presentation tab.
-    page = _page(name, active_path, body)
-    # Give <pre> readable wrapping (scoped style addition).
-    return page.replace(
-        "</style>",
-        " pre { white-space: pre-wrap; word-wrap: break-word; background: #f7f8fa; padding: 1rem; border-radius: 6px; }</style>",
-    )
+    return _page(name, active_path, body)
