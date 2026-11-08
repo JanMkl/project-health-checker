@@ -50,12 +50,34 @@ class WebAppTestBase(unittest.TestCase):
         return load_config(self.config_path)
 
 
-class IndexTests(WebAppTestBase):
-    def test_index_renders_dashboard(self):
+class PageStructureTests(WebAppTestBase):
+    PAGES = ("/", "/repositories", "/settings", "/credentials", "/run")
+
+    def test_all_pages_render_with_nav_bar(self):
+        for path in self.PAGES:
+            r = self.client.get(path)
+            self.assertEqual(r.status_code, 200, path)
+            # Every page carries the shared navigation bar with all five links.
+            self.assertIn("<nav>", r.text, path)
+            for link, label in (
+                ("/repositories", "Repositories"),
+                ("/settings", "Settings"),
+                ("/credentials", "Credentials"),
+                ("/run", "Run analysis"),
+                ("/", "Memos &amp; Presentation"),
+            ):
+                self.assertIn(f'href="{link}"', r.text, path)
+                self.assertIn(label, r.text, path)
+
+    def test_root_is_memos_page(self):
         r = self.client.get("/")
-        self.assertEqual(r.status_code, 200)
-        self.assertIn("Project Health Checker", r.text)
-        self.assertIn("metal3-io/metal3-dev-env", r.text)
+        self.assertIn("Memos", r.text)
+        self.assertIn("Presentation", r.text)
+
+    def test_active_link_is_marked(self):
+        r = self.client.get("/settings")
+        # The Settings link is marked active on the Settings page.
+        self.assertIn('href="/settings" class="active"', r.text)
 
     def test_status_endpoint(self):
         r = self.client.get("/status")
@@ -65,10 +87,22 @@ class IndexTests(WebAppTestBase):
         self.assertIn("message", body)
 
 
+class StatusVisibilityTests(WebAppTestBase):
+    def test_status_only_on_run_page(self):
+        self.assertIn("Analysis status", self.client.get("/run").text)
+        for path in ("/", "/repositories", "/settings", "/credentials"):
+            self.assertNotIn("Analysis status", self.client.get(path).text, path)
+
+
 class RepoEditTests(WebAppTestBase):
+    def test_repositories_page_lists_repos(self):
+        page = self.client.get("/repositories").text
+        self.assertIn("metal3-io/metal3-dev-env", page)
+
     def test_add_repo(self):
         r = self.client.post("/repos/add", data={"repo": "octocat/Hello-World"})
         self.assertEqual(r.status_code, 303)
+        self.assertEqual(r.headers["location"], "/repositories")
         self.assertIn("octocat/Hello-World", self._config().repos)
 
     def test_add_duplicate_repo_is_noop(self):
@@ -81,6 +115,7 @@ class RepoEditTests(WebAppTestBase):
         self.client.post("/repos/add", data={"repo": "octocat/Hello-World"})
         r = self.client.post("/repos/remove", data={"repo": "octocat/Hello-World"})
         self.assertEqual(r.status_code, 303)
+        self.assertEqual(r.headers["location"], "/repositories")
         self.assertNotIn("octocat/Hello-World", self._config().repos)
 
     def test_remove_last_repo_is_rejected(self):
@@ -98,6 +133,7 @@ class SettingsTests(WebAppTestBase):
             "/settings", data={"since": "30 days ago", "backend": "codex", "until": ""}
         )
         self.assertEqual(r.status_code, 303)
+        self.assertEqual(r.headers["location"], "/settings")
         cfg = self._config()
         self.assertEqual(cfg.since, "30 days ago")
         self.assertEqual(cfg.backend, "codex")
@@ -129,6 +165,7 @@ class CredentialTests(WebAppTestBase):
             },
         )
         self.assertEqual(r.status_code, 303)
+        self.assertEqual(r.headers["location"], "/credentials")
         # Stored on disk with restrictive permissions.
         env_file = os.path.join(self.secrets_dir, "credentials.env")
         self.assertTrue(os.path.exists(env_file))
@@ -140,8 +177,8 @@ class CredentialTests(WebAppTestBase):
         # Applied to the environment for the next run.
         self.assertEqual(os.environ.get("GITHUB_AUTH_TOKEN"), "ghp_secret123")
 
-        # The dashboard shows status, never the secret value itself.
-        page = self.client.get("/").text
+        # The credentials page shows status, never the secret value itself.
+        page = self.client.get("/credentials").text
         self.assertNotIn("ghp_secret123", page)
         self.assertIn("set", page)  # a "✅ set" badge is present
 
@@ -157,7 +194,7 @@ class MemoBrowseTests(WebAppTestBase):
         with open(memo_path, "w", encoding="utf-8") as fh:
             fh.write("# Hello memo\n\nSome content.\n")
 
-        # Listed on the dashboard.
+        # Listed on the Memos & Presentation page (root).
         page = self.client.get("/").text
         self.assertIn("octocat__Hello-World-memo.md", page)
 
@@ -196,6 +233,7 @@ class RunAnalysisTests(WebAppTestBase):
     def test_run_triggers_fleet(self):
         r = self.client.post("/run", data={"force": "1"})
         self.assertEqual(r.status_code, 303)
+        self.assertEqual(r.headers["location"], "/run")
         # The run happens on a background thread; wait briefly for it.
         for _ in range(50):
             if self.run_calls:

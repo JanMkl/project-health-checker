@@ -59,15 +59,17 @@ and serves a dashboard on port 8080.
 docker compose up
 ```
 
-Then open <http://localhost:8080>. From the dashboard you can:
+Then open <http://localhost:8080>. A navigation bar links the pages:
 
-- edit the repositories to analyse (add/remove, persisted to `repos.toml`),
-- set the analysis window and backend,
-- enter the GitHub token and AI-tool API keys (stored under `secrets/`, never
-  shown back in the browser),
-- (re-)run the analysis (runs in the background; the page shows progress),
-- browse the generated memos, and
-- download the PowerPoint deck.
+- **Memos & Presentation** (the default page) — browse the generated memos and
+  download the PowerPoint deck.
+- **Repositories** — add/remove the repositories to analyse (persisted to
+  `repos.toml`).
+- **Settings** — set the analysis window (`since`/`until`) and the backend.
+- **Credentials** — enter the GitHub token and AI-tool API keys (stored under
+  `secrets/`, never shown back in the browser).
+- **Run analysis** — (re-)run the analysis; it runs in the background and this
+  page shows the status.
 
 `docker compose up` bind-mounts `repos.toml`, `output/`, and `secrets/` so your
 config, results, and credentials persist on the host across restarts.
