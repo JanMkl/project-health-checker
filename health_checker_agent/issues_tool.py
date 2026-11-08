@@ -1,11 +1,11 @@
 """Tool: read issues for a project via the GitHub REST API.
 
-Uses ``curl`` (via :mod:`github_summary_agent.github_api`) to fetch issues in a
+Uses ``curl`` (via :mod:`health_checker_agent.github_api`) to fetch issues in a
 given state (open, closed, or all) and renders them as text the agent can hand
 to kiro-cli for the "project direction" and "active community" analysis.
 
 Pull requests are excluded here; they are handled by
-:mod:`github_summary_agent.pulls_tool`.
+:mod:`health_checker_agent.pulls_tool`.
 """
 
 from __future__ import annotations

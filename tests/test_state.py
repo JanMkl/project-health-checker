@@ -2,10 +2,10 @@ import os
 import tempfile
 import unittest
 
-from github_summary_agent.git_log_tool import Commit, GitLog
-from github_summary_agent.issues_tool import Issue, IssueCollection
-from github_summary_agent.pulls_tool import PullRequest, PullRequestCollection
-from github_summary_agent.state import (
+from health_checker_agent.git_log_tool import Commit, GitLog
+from health_checker_agent.issues_tool import Issue, IssueCollection
+from health_checker_agent.pulls_tool import PullRequest, PullRequestCollection
+from health_checker_agent.state import (
     compute_fingerprint,
     load_fingerprint,
     save_state,

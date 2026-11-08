@@ -1,11 +1,11 @@
-# GitHub Summary Agent
+# Project Health Checker
 
-An agent that analyses one or many GitHub projects' git activity, issues, and
-pull requests, asks an AI coding CLI to write a per-project management memo (in
-Markdown), and rolls everything up into a single fleet report grouping projects
-by how much management attention they need. The memo CLI is pluggable —
-`kiro-cli` (default), `codex`, or `cursor-agent` — selected with `--backend` or
-the `backend` config key.
+`health-checker-agent` analyses one or many GitHub projects' git activity,
+issues, and pull requests, asks an AI coding CLI to write a per-project
+management memo (in Markdown), and rolls everything up into a single fleet
+report grouping projects by how much management attention they need. The memo
+CLI is pluggable — `kiro-cli` (default), `codex`, or `cursor-agent` — selected
+with `--backend` or the `backend` config key.
 
 The access policy for the agent is defined in [AGENTS.md](AGENTS.md).
 
@@ -99,7 +99,7 @@ repos = [
 Then run:
 
 ```bash
-.venv/bin/python -m github_summary_agent --config repos.toml
+.venv/bin/python -m health_checker_agent --config repos.toml
 ```
 
 This clones each repo under `output/repos/`, writes one memo per repo
@@ -108,7 +108,7 @@ This clones each repo under `output/repos/`, writes one memo per repo
 ### A single repository
 
 ```bash
-.venv/bin/python -m github_summary_agent \
+.venv/bin/python -m health_checker_agent \
     --repo metal3-io/metal3-dev-env \
     --since "30 days ago"
 ```
@@ -150,7 +150,7 @@ backend = "codex"
 ```
 
 ```bash
-.venv/bin/python -m github_summary_agent --config repos.toml --backend cursor-agent
+.venv/bin/python -m health_checker_agent --config repos.toml --backend cursor-agent
 ```
 
 Only the executable for the selected backend needs to be on your `PATH`; the
@@ -202,7 +202,7 @@ the Markdown memos and fleet report. The deck has:
   management attention it needs.
 
 ```bash
-.venv/bin/python -m github_summary_agent --config repos.toml --pptx
+.venv/bin/python -m health_checker_agent --config repos.toml --pptx
 ```
 
 The export relies on [`python-pptx`](https://python-pptx.readthedocs.io), which

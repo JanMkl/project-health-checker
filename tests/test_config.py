@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 
-from github_summary_agent.config import ConfigError, load_config, parse_config
+from health_checker_agent.config import ConfigError, load_config, parse_config
 
 
 class ParseConfigTests(unittest.TestCase):

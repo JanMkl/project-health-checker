@@ -1,8 +1,8 @@
 import unittest
 from unittest import mock
 
-from github_summary_agent.commands import CommandResult
-from github_summary_agent.git_log_tool import (
+from health_checker_agent.commands import CommandResult
+from health_checker_agent.git_log_tool import (
     _REC,
     _SEP,
     GitLog,
@@ -15,7 +15,7 @@ def _make_record(h, name, email, date, subject):
 
 
 class GitLogToolTests(unittest.TestCase):
-    @mock.patch("github_summary_agent.git_log_tool.run_command")
+    @mock.patch("health_checker_agent.git_log_tool.run_command")
     def test_parses_commits(self, mock_run):
         raw = (
             _make_record("abc123def", "Ada", "ada@x.io", "2026-10-01T10:00:00", "Init")
@@ -29,7 +29,7 @@ class GitLogToolTests(unittest.TestCase):
         self.assertEqual(log.commits[0].author_name, "Ada")
         self.assertEqual(log.commits[1].subject, "Fix bug")
 
-    @mock.patch("github_summary_agent.git_log_tool.run_command")
+    @mock.patch("health_checker_agent.git_log_tool.run_command")
     def test_passes_since_and_until_args(self, mock_run):
         mock_run.return_value = CommandResult(0, "", "")
         read_git_log("/tmp/repo", since="2026-10-01", until="2026-10-31")
@@ -40,7 +40,7 @@ class GitLogToolTests(unittest.TestCase):
         self.assertIn("--until=2026-10-31", args)
         self.assertIn("/tmp/repo", args)
 
-    @mock.patch("github_summary_agent.git_log_tool.run_command")
+    @mock.patch("health_checker_agent.git_log_tool.run_command")
     def test_empty_log(self, mock_run):
         mock_run.return_value = CommandResult(0, "", "")
         log = read_git_log("/tmp/repo", since="2026-10-01")

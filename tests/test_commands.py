@@ -2,7 +2,7 @@ import subprocess
 import unittest
 from unittest import mock
 
-from github_summary_agent.commands import (
+from health_checker_agent.commands import (
     ALLOWED_COMMANDS,
     CommandNotAllowedError,
     run_command,
@@ -27,7 +27,7 @@ class RunCommandTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             run_command([])
 
-    @mock.patch("github_summary_agent.commands.subprocess.run")
+    @mock.patch("health_checker_agent.commands.subprocess.run")
     def test_runs_allowed_command_and_wraps_result(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
             args=["git", "--version"], returncode=0, stdout="git 2.0", stderr=""
@@ -37,7 +37,7 @@ class RunCommandTests(unittest.TestCase):
         self.assertEqual(result.stdout, "git 2.0")
         mock_run.assert_called_once()
 
-    @mock.patch("github_summary_agent.commands.subprocess.run")
+    @mock.patch("health_checker_agent.commands.subprocess.run")
     def test_check_raises_on_nonzero(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
             args=["git", "boom"], returncode=1, stdout="", stderr="bad"
@@ -45,7 +45,7 @@ class RunCommandTests(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             run_command(["git", "boom"], check=True)
 
-    @mock.patch("github_summary_agent.commands.subprocess.run")
+    @mock.patch("health_checker_agent.commands.subprocess.run")
     def test_check_false_returns_failed_result(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
             args=["curl", "x"], returncode=22, stdout="", stderr="404"
@@ -54,7 +54,7 @@ class RunCommandTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.returncode, 22)
 
-    @mock.patch("github_summary_agent.commands.subprocess.run")
+    @mock.patch("health_checker_agent.commands.subprocess.run")
     def test_stdin_input_passed_to_subprocess(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
             args=["kiro-cli", "chat"], returncode=0, stdout="ok", stderr=""

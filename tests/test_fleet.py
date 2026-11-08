@@ -1,7 +1,7 @@
 import unittest
 
-from github_summary_agent.fleet import RepoOutcome, build_fleet_report
-from github_summary_agent.health import (
+from health_checker_agent.fleet import RepoOutcome, build_fleet_report
+from health_checker_agent.health import (
     ATTENTION,
     HEALTHY,
     INVESTIGATE,
@@ -60,8 +60,8 @@ class FleetReportTests(unittest.TestCase):
         self.assertIn("_None._", report)
 
     def test_failed_repo_rendered_without_memo_link(self):
-        from github_summary_agent.fleet import RepoOutcome
-        from github_summary_agent.health import FAILED, HealthAssessment
+        from health_checker_agent.fleet import RepoOutcome
+        from health_checker_agent.health import FAILED, HealthAssessment
 
         outcomes = [
             RepoOutcome(

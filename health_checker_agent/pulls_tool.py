@@ -1,6 +1,6 @@
 """Tool: read pull requests for a project via the GitHub REST API.
 
-Uses ``curl`` (via :mod:`github_summary_agent.github_api`) to fetch pull
+Uses ``curl`` (via :mod:`health_checker_agent.github_api`) to fetch pull
 requests in a given state (open, closed, or all). PR authorship and review
 activity are strong signals of who the active community members are, which the
 git log alone does not capture.

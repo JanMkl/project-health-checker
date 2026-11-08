@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from github_summary_agent import __main__ as cli
-from github_summary_agent.__main__ import build_parser, main
+from health_checker_agent import __main__ as cli
+from health_checker_agent.__main__ import build_parser, main
 
 
 class ParserTests(unittest.TestCase):

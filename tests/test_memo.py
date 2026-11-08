@@ -1,11 +1,11 @@
 import unittest
 from unittest import mock
 
-from github_summary_agent.commands import CommandResult
-from github_summary_agent.git_log_tool import Commit, GitLog
-from github_summary_agent.issues_tool import Issue, IssueCollection
-from github_summary_agent.memo import build_prompt, generate_memo
-from github_summary_agent.pulls_tool import PullRequest, PullRequestCollection
+from health_checker_agent.commands import CommandResult
+from health_checker_agent.git_log_tool import Commit, GitLog
+from health_checker_agent.issues_tool import Issue, IssueCollection
+from health_checker_agent.memo import build_prompt, generate_memo
+from health_checker_agent.pulls_tool import PullRequest, PullRequestCollection
 
 
 def _sample_log():
@@ -67,7 +67,7 @@ class MemoTests(unittest.TestCase):
         # which the presentation export relies on.
         self.assertIn("**Direction summary:**", prompt)
 
-    @mock.patch("github_summary_agent.memo.run_command")
+    @mock.patch("health_checker_agent.memo.run_command")
     def test_generate_memo_defaults_to_kiro_cli(self, mock_run):
         mock_run.return_value = CommandResult(0, "# Memo\n\nAll good.\n", "")
         open_issues, closed_issues, open_pulls, closed_pulls = _sample_activity()
@@ -89,7 +89,7 @@ class MemoTests(unittest.TestCase):
         self.assertTrue(stdin_input.startswith("You are a technical program manager"))
         self.assertEqual(memo, "# Memo\n\nAll good.")
 
-    @mock.patch("github_summary_agent.memo.run_command")
+    @mock.patch("health_checker_agent.memo.run_command")
     def test_generate_memo_uses_codex_backend(self, mock_run):
         # codex returns the memo via --output-last-message, not stdout, so the
         # fake writes the file and returns noisy stdout that must be ignored.
@@ -117,7 +117,7 @@ class MemoTests(unittest.TestCase):
         # The memo comes from the last-message file, not the noisy stdout.
         self.assertEqual(memo, "# Codex Memo\n\nclean")
 
-    @mock.patch("github_summary_agent.memo.run_command")
+    @mock.patch("health_checker_agent.memo.run_command")
     def test_generate_memo_uses_cursor_backend(self, mock_run):
         mock_run.return_value = CommandResult(0, "# Memo\n", "")
         open_issues, closed_issues, open_pulls, closed_pulls = _sample_activity()
@@ -133,7 +133,7 @@ class MemoTests(unittest.TestCase):
         self.assertEqual(args[0], "cursor-agent")
 
     def test_generate_memo_rejects_unknown_backend(self):
-        from github_summary_agent.backends import UnknownBackendError
+        from health_checker_agent.backends import UnknownBackendError
 
         open_issues, closed_issues, open_pulls, closed_pulls = _sample_activity()
         with self.assertRaises(UnknownBackendError):

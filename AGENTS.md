@@ -1,6 +1,7 @@
-# GitHub Summary Agent
+# Project Health Checker
 
-An agent that fetches git logs from GitHub projects and produces summaries.
+`health-checker-agent` fetches git logs, issues, and pull requests from GitHub
+projects and produces per-project health memos and a fleet report.
 
 ## Agent Access Policy
 

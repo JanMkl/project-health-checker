@@ -5,10 +5,10 @@ cloned into the working directory, analysed into its own memo, and a fleet
 roll-up report classifies repos by how much management attention they need.
 
 Example:
-    python -m github_summary_agent --config repos.toml
+    python -m health_checker_agent --config repos.toml
 
 A single repo can be analysed without a config file:
-    python -m github_summary_agent --repo metal3-io/metal3-dev-env --since "30 days ago"
+    python -m health_checker_agent --repo metal3-io/metal3-dev-env --since "30 days ago"
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from .config import DEFAULT_WORK_DIR, Config, ConfigError, load_config
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="github_summary_agent",
+        prog="health_checker_agent",
         description=(
             "Summarise GitHub projects' git activity, issues, and pull requests "
             "into markdown management memos via kiro-cli, plus a fleet roll-up."

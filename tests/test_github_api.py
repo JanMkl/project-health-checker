@@ -3,14 +3,14 @@ import os
 import unittest
 from unittest import mock
 
-from github_summary_agent.commands import CommandResult
-from github_summary_agent.github_api import (
+from health_checker_agent.commands import CommandResult
+from health_checker_agent.github_api import (
     GitHubApiError,
     fetch_list,
     resolve_token,
 )
 
-RUN_COMMAND = "github_summary_agent.github_api.run_command"
+RUN_COMMAND = "health_checker_agent.github_api.run_command"
 
 
 class ResolveTokenTests(unittest.TestCase):

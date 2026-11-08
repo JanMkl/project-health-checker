@@ -3,14 +3,14 @@ import tempfile
 import unittest
 from unittest import mock
 
-from github_summary_agent.clone_tool import (
+from health_checker_agent.clone_tool import (
     clone_or_update,
     latest_commit_hash,
     repo_slug,
 )
-from github_summary_agent.commands import CommandResult
+from health_checker_agent.commands import CommandResult
 
-RUN_COMMAND = "github_summary_agent.clone_tool.run_command"
+RUN_COMMAND = "health_checker_agent.clone_tool.run_command"
 
 
 class RepoSlugTests(unittest.TestCase):

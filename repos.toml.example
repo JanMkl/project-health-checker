@@ -1,4 +1,4 @@
-# Example configuration for the GitHub Summary Agent.
+# Example configuration for the Project Health Checker.
 # Copy to repos.toml and edit. Parsed with Python's stdlib tomllib.
 
 # Start of the git-log window. Accepts anything `git log --since` understands,

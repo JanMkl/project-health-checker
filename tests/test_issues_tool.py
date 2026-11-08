@@ -3,12 +3,12 @@ import os
 import unittest
 from unittest import mock
 
-from github_summary_agent.commands import CommandResult
-from github_summary_agent.github_api import GitHubApiError
-from github_summary_agent.issues_tool import read_issues, read_open_issues
+from health_checker_agent.commands import CommandResult
+from health_checker_agent.github_api import GitHubApiError
+from health_checker_agent.issues_tool import read_issues, read_open_issues
 
 # run_command now lives in github_api, so patch it there.
-RUN_COMMAND = "github_summary_agent.github_api.run_command"
+RUN_COMMAND = "health_checker_agent.github_api.run_command"
 
 
 class IssuesToolTests(unittest.TestCase):

@@ -1,6 +1,6 @@
 import unittest
 
-from github_summary_agent.backends import (
+from health_checker_agent.backends import (
     BACKEND_COMMANDS,
     CODEX,
     CURSOR,
@@ -91,7 +91,7 @@ class CursorExecutableResolutionTests(unittest.TestCase):
             return _FakeResult(stdout="ok")
 
         with mock.patch(
-            "github_summary_agent.backends.shutil.which",
+            "health_checker_agent.backends.shutil.which",
             side_effect=lambda e: e if e in available else None,
         ):
             get_backend(CURSOR).generate("PROMPT", runner, None)

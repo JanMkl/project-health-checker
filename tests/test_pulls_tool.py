@@ -2,10 +2,10 @@ import json
 import unittest
 from unittest import mock
 
-from github_summary_agent.commands import CommandResult
-from github_summary_agent.pulls_tool import read_pull_requests
+from health_checker_agent.commands import CommandResult
+from health_checker_agent.pulls_tool import read_pull_requests
 
-RUN_COMMAND = "github_summary_agent.github_api.run_command"
+RUN_COMMAND = "health_checker_agent.github_api.run_command"
 
 
 class PullsToolTests(unittest.TestCase):

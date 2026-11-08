@@ -5,17 +5,17 @@ from dataclasses import dataclass
 from typing import List
 from unittest import mock
 
-from github_summary_agent import presentation
-from github_summary_agent.git_log_tool import Commit, GitLog
-from github_summary_agent.health import ATTENTION, HEALTHY, HealthAssessment
-from github_summary_agent.issues_tool import Issue, IssueCollection
-from github_summary_agent.presentation import (
+from health_checker_agent import presentation
+from health_checker_agent.git_log_tool import Commit, GitLog
+from health_checker_agent.health import ATTENTION, HEALTHY, HealthAssessment
+from health_checker_agent.issues_tool import Issue, IssueCollection
+from health_checker_agent.presentation import (
     PptxNotInstalledError,
     _strip_markdown,
     build_presentation,
     build_project_slide_data,
 )
-from github_summary_agent.pulls_tool import PullRequest, PullRequestCollection
+from health_checker_agent.pulls_tool import PullRequest, PullRequestCollection
 
 
 @dataclass

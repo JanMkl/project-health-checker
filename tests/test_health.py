@@ -1,14 +1,14 @@
 import unittest
 
-from github_summary_agent.git_log_tool import Commit, GitLog
-from github_summary_agent.health import (
+from health_checker_agent.git_log_tool import Commit, GitLog
+from health_checker_agent.health import (
     ATTENTION,
     HEALTHY,
     INVESTIGATE,
     classify_health,
 )
-from github_summary_agent.issues_tool import Issue, IssueCollection
-from github_summary_agent.pulls_tool import PullRequest, PullRequestCollection
+from health_checker_agent.issues_tool import Issue, IssueCollection
+from health_checker_agent.pulls_tool import PullRequest, PullRequestCollection
 
 
 def _log(n):

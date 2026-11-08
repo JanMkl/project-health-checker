@@ -3,17 +3,17 @@ import tempfile
 import unittest
 from unittest import mock
 
-from github_summary_agent import agent
-from github_summary_agent.agent import (
+from health_checker_agent import agent
+from health_checker_agent.agent import (
     _resolve_output_path,
     _slugify,
     run_fleet,
     run_repo,
 )
-from github_summary_agent.config import Config
-from github_summary_agent.git_log_tool import Commit, GitLog
-from github_summary_agent.issues_tool import Issue, IssueCollection
-from github_summary_agent.pulls_tool import PullRequestCollection
+from health_checker_agent.config import Config
+from health_checker_agent.git_log_tool import Commit, GitLog
+from health_checker_agent.issues_tool import Issue, IssueCollection
+from health_checker_agent.pulls_tool import PullRequestCollection
 
 
 def _log(n=1):

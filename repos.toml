@@ -1,4 +1,4 @@
-# GitHub Summary Agent configuration (converted from the shell repos.conf).
+# Project Health Checker configuration (converted from the shell repos.conf).
 # Parsed with Python's stdlib tomllib.
 
 since = "2026-01-01"
