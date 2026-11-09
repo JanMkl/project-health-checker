@@ -13,3 +13,6 @@ output/*
 # Safety net: the app no longer writes credentials to disk (they live only in
 # the process environment), but never commit any stray secrets directory.
 secrets/
+
+# Ignore configuration that should stay local
+repos.toml
