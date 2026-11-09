@@ -165,6 +165,20 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
+Then create your configuration. `repos.toml` holds your personal list of
+repositories and is intentionally **not tracked in git** (it's in
+`.gitignore`), so you must create it before the first run by copying the
+provided template:
+
+```bash
+cp repos.toml.example repos.toml
+# then edit repos.toml to list the repositories you want to analyse
+```
+
+See [`repos.toml.example`](repos.toml.example) for all available settings. (The
+Docker image seeds `repos.toml` from this template automatically on first start
+if one isn't mounted.)
+
 ## GitHub token (optional but recommended)
 
 Unauthenticated GitHub API requests are rate-limited to 60/hour. If you export a
