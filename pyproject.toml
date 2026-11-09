@@ -3,6 +3,14 @@ name = "health-checker-agent"
 version = "0.1.0"
 description = "An agent that analyses GitHub project activity into a management memo and health report."
 requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [
+    { name = "Jan Melén" },
+]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+]
 dependencies = []
 
 [project.optional-dependencies]
@@ -22,7 +30,9 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 
 [build-system]
-requires = ["setuptools>=61.0"]
+# setuptools >= 77 is required for the SPDX `license` string and `license-files`
+# project metadata used above.
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]

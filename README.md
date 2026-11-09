@@ -322,3 +322,10 @@ New code must ship with tests, and the suite must pass before any commit (see
 # Or with the standard library test runner
 .venv/bin/python -m unittest discover -s tests
 ```
+
+## License
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and
+[NOTICE](NOTICE).
+
+Copyright 2026, Jan Melén.
