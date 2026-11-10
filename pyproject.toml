@@ -1,6 +1,6 @@
 [project]
 name = "health-checker-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "An agent that analyses GitHub project activity into a management memo and health report."
 requires-python = ">=3.10"
 license = "Apache-2.0"
