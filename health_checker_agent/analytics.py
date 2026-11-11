@@ -53,6 +53,11 @@ class HealthMetrics:
     closed_issues: int
     open_pulls: int
     closed_pulls: int
+    # Whether a (non-empty) ADOPTERS file was found. Presence only, not a count:
+    # ADOPTERS formats are not standardised (tables, lists, or a stub linking to
+    # an external page), so a count would be fragile. Folded into the health
+    # visual rather than given its own visual, since many projects have none.
+    has_adopters: bool = False
 
     @property
     def open_work(self) -> int:
@@ -85,8 +90,13 @@ def health_metrics(
     closed_issues: IssueCollection,
     open_pulls: PullRequestCollection,
     closed_pulls: PullRequestCollection,
+    has_adopters: bool = False,
 ) -> HealthMetrics:
-    """Bundle the health category with the activity counts behind it."""
+    """Bundle the health category with the activity counts behind it.
+
+    ``has_adopters`` indicates whether an ADOPTERS file was found; it is carried
+    on the metrics so the health visual can show its presence as a one-liner.
+    """
     return HealthMetrics(
         category=category,
         reason=reason,
@@ -95,6 +105,7 @@ def health_metrics(
         closed_issues=closed_issues.count,
         open_pulls=open_pulls.count,
         closed_pulls=closed_pulls.count,
+        has_adopters=has_adopters,
     )
 
 

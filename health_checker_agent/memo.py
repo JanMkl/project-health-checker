@@ -1,18 +1,24 @@
 """Generate a management memo via a pluggable AI-CLI backend.
 
-Builds a prompt from the git log, issues (open + closed), and pull requests
-(open + closed), then asks an AI coding CLI (``kiro-cli`` by default, or
-``codex`` / ``cursor-agent``) to write a markdown management memo analysing
-project direction, active contributors, and project health.
+Builds a prompt from the git log, issues (open + closed), pull requests
+(open + closed), and the project's ADOPTERS list (when found), then asks an AI
+coding CLI (``kiro-cli`` by default, or ``codex`` / ``cursor-agent``) to write a
+markdown management memo analysing project direction, active contributors,
+adopters, and project health.
 """
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from .backends import DEFAULT_BACKEND, get_backend
 from .commands import run_command
 from .git_log_tool import GitLog
 from .issues_tool import IssueCollection
 from .pulls_tool import PullRequestCollection
+
+if TYPE_CHECKING:  # avoid an import cycle at runtime; only needed for typing
+    from .adopters_tool import Adopters
 
 _PROMPT_TEMPLATE = """\
 You are a technical program manager. Using the project activity below, write a \
@@ -40,6 +46,19 @@ community members who are active in issues/PRs even if they have few or no \
 commits.
 - "## Project Health" — assess the health of the project (activity level, how \
 open work compares to what is being closed/merged, and responsiveness).
+- "## Adopters" — base this section on the "Adopters" data below. The ADOPTERS \
+file format is not standardised: it may be a table or list of organisations, or \
+it may just be a short stub that links to an external adopters page without \
+naming anyone inline. Treat the PRESENCE of an ADOPTERS file as meaningful in \
+itself — it signals the project has a recognised adopter community and \
+real-world usage — even when you cannot extract individual organisations from \
+the content. So: if specific organisations are listed, summarise who is using \
+the project and call out notable names. If an ADOPTERS file is present but does \
+not enumerate organisations inline (e.g. it points to an external page), still \
+state that the project maintains a public adopters list (and mention the linked \
+page if given), without implying the list is empty. Only if NO ADOPTERS file \
+was found at all, state briefly that no public adopters list is available. \
+Never invent adopters.
 - "## Risks" — a bulleted list of the key risks warranting management \
 attention. Each bullet should be a brief, self-contained risk statement.
 - A final closing line, on its own, prefixed verbatim with \
@@ -66,7 +85,12 @@ Markdown only, with no surrounding commentary.
 
 ## Closed pull requests
 {closed_pulls}
+
+## Adopters
+{adopters}
 """
+
+_NO_ADOPTERS_TEXT = "(no ADOPTERS file found)"
 
 
 def build_prompt(
@@ -76,14 +100,17 @@ def build_prompt(
     closed_issues: IssueCollection,
     open_pulls: PullRequestCollection,
     closed_pulls: PullRequestCollection,
+    adopters: "Adopters | None" = None,
 ) -> str:
-    """Build the kiro-cli prompt from the collected activity."""
+    """Build the AI-CLI prompt from the collected activity."""
+    adopters_text = adopters.to_text() if adopters is not None else _NO_ADOPTERS_TEXT
     return _PROMPT_TEMPLATE.format(
         git_log=git_log.to_text(),
         open_issues=open_issues.to_text(),
         closed_issues=closed_issues.to_text(),
         open_pulls=open_pulls.to_text(),
         closed_pulls=closed_pulls.to_text(),
+        adopters=adopters_text,
     )
 
 
@@ -94,6 +121,7 @@ def generate_memo(
     closed_issues: IssueCollection,
     open_pulls: PullRequestCollection,
     closed_pulls: PullRequestCollection,
+    adopters: "Adopters | None" = None,
     backend: str = DEFAULT_BACKEND,
     timeout: float | None = 300,
 ) -> str:
@@ -105,6 +133,7 @@ def generate_memo(
         closed_issues: Closed issues.
         open_pulls: Open pull requests.
         closed_pulls: Closed pull requests.
+        adopters: Optional ADOPTERS information for the project.
         backend: Which AI CLI to invoke (``kiro-cli``, ``codex``, or
             ``cursor-agent``).
         timeout: Optional command timeout in seconds.
@@ -121,6 +150,7 @@ def generate_memo(
         closed_issues=closed_issues,
         open_pulls=open_pulls,
         closed_pulls=closed_pulls,
+        adopters=adopters,
     )
     # Each backend runs its tool non-interactively, feeding the prompt on stdin
     # (prompts for large repos can exceed the OS argument-length limit) and

@@ -66,6 +66,42 @@ class MemoTests(unittest.TestCase):
         # Prompt requires the explicit one-sentence direction summary marker,
         # which the presentation export relies on.
         self.assertIn("**Direction summary:**", prompt)
+        # The memo now also has an Adopters section.
+        self.assertIn("## Adopters", prompt)
+
+    def test_build_prompt_includes_adopters_when_present(self):
+        from health_checker_agent.adopters_tool import Adopters
+
+        open_issues, closed_issues, open_pulls, closed_pulls = _sample_activity()
+        adopters = Adopters(
+            repo="octocat/Hello-World",
+            source="octocat/community:ADOPTERS.md",
+            content="# Adopters\n\n| Ericsson | integration |",
+        )
+        prompt = build_prompt(
+            _sample_log(),
+            open_issues=open_issues,
+            closed_issues=closed_issues,
+            open_pulls=open_pulls,
+            closed_pulls=closed_pulls,
+            adopters=adopters,
+        )
+        self.assertIn("## Adopters", prompt)
+        self.assertIn("Ericsson", prompt)
+        self.assertIn("octocat/community:ADOPTERS.md", prompt)
+
+    def test_build_prompt_marks_missing_adopters(self):
+        open_issues, closed_issues, open_pulls, closed_pulls = _sample_activity()
+        prompt = build_prompt(
+            _sample_log(),
+            open_issues=open_issues,
+            closed_issues=closed_issues,
+            open_pulls=open_pulls,
+            closed_pulls=closed_pulls,
+            adopters=None,
+        )
+        self.assertIn("## Adopters", prompt)
+        self.assertIn("no ADOPTERS file found", prompt)
 
     @mock.patch("health_checker_agent.memo.run_command")
     def test_generate_memo_defaults_to_kiro_cli(self, mock_run):

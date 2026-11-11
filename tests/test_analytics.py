@@ -60,6 +60,21 @@ class HealthMetricsTests(unittest.TestCase):
         self.assertEqual(m.closed_pulls, 2)
         self.assertEqual(m.open_work, 3)
         self.assertEqual(m.closed_work, 3)
+        # Adopters presence defaults to False when not supplied.
+        self.assertFalse(m.has_adopters)
+
+    def test_carries_adopters_presence(self):
+        m = health_metrics(
+            "healthy",
+            "looks good",
+            _log(["a"]),
+            _issues("open", []),
+            _issues("closed", []),
+            _pulls("open", []),
+            _pulls("closed", []),
+            has_adopters=True,
+        )
+        self.assertTrue(m.has_adopters)
 
 
 class TopContributorsTests(unittest.TestCase):

@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import List
 
 from .backends import DEFAULT_BACKEND
+from .adopters_tool import Adopters, read_adopters
 from .clone_tool import clone_or_update, repo_slug
 from .config import Config
 from .fleet import RepoOutcome, build_fleet_report
@@ -54,6 +55,7 @@ class RepoResult:
     memo_markdown: str
     memo_path: str
     analysed: bool  # True if kiro-cli ran this time, False if memo was reused
+    adopters: Adopters | None = None  # ADOPTERS info when found
 
 
 @dataclass(frozen=True)
@@ -123,6 +125,13 @@ def run_repo(
     open_pulls = read_pull_requests(repo, state="open", token=token)
     closed_pulls = read_pull_requests(repo, state="closed", token=token)
 
+    # ADOPTERS is best-effort extra context; a failure to fetch it must not
+    # abort the analysis.
+    try:
+        adopters = read_adopters(repo, token=token)
+    except Exception:  # noqa: BLE001 - optional context only
+        adopters = Adopters(repo=repo, source=None, content=None)
+
     assessment = classify_health(
         repo, git_log, open_issues, closed_issues, open_pulls, closed_pulls
     )
@@ -157,6 +166,7 @@ def run_repo(
             memo_markdown=memo_markdown,
             memo_path=memo_path,
             analysed=False,
+            adopters=adopters,
         )
 
     memo_markdown = generate_memo(
@@ -165,6 +175,7 @@ def run_repo(
         closed_issues=closed_issues,
         open_pulls=open_pulls,
         closed_pulls=closed_pulls,
+        adopters=adopters,
         backend=backend,
     )
     with open(memo_path, "w", encoding="utf-8") as fh:
@@ -184,6 +195,7 @@ def run_repo(
         memo_markdown=memo_markdown,
         memo_path=memo_path,
         analysed=True,
+        adopters=adopters,
     )
 
 

@@ -5,12 +5,17 @@ from dataclasses import dataclass
 from typing import List
 from unittest import mock
 
+from typing import Optional
+
 from health_checker_agent import presentation
+from health_checker_agent.adopters_tool import Adopters
+from health_checker_agent.analytics import HealthMetrics
 from health_checker_agent.git_log_tool import Commit, GitLog
 from health_checker_agent.health import ATTENTION, HEALTHY, HealthAssessment
 from health_checker_agent.issues_tool import Issue, IssueCollection
 from health_checker_agent.presentation import (
     PptxNotInstalledError,
+    _health_lines,
     _strip_markdown,
     build_presentation,
     build_project_slide_data,
@@ -30,6 +35,7 @@ class FakeResult:
     closed_pulls: PullRequestCollection
     assessment: HealthAssessment
     memo_markdown: str
+    adopters: Optional[Adopters] = None
 
 
 _DEFAULT_MEMO = (
@@ -47,7 +53,7 @@ _DEFAULT_MEMO = (
 )
 
 
-def _result(repo, category, *, commits=2, memo=_DEFAULT_MEMO):
+def _result(repo, category, *, commits=2, memo=_DEFAULT_MEMO, adopters=None):
     log = GitLog(
         since="x",
         until=None,
@@ -77,7 +83,61 @@ def _result(repo, category, *, commits=2, memo=_DEFAULT_MEMO):
         closed_pulls=closed_p,
         assessment=HealthAssessment(repo, category, f"reason for {repo}"),
         memo_markdown=memo,
+        adopters=adopters,
     )
+
+
+def _adopters(repo, present):
+    """Build an Adopters that is present (any content) or absent."""
+    if present:
+        # Content shape is irrelevant to presence; use a simple stub.
+        return Adopters(
+            repo=repo,
+            source="o/community:ADOPTERS.md",
+            content="# Adopters\n\n- Ericsson\n- Red Hat\n",
+        )
+    return Adopters(repo=repo, source=None, content=None)
+
+
+class AdoptersHealthVisualTests(unittest.TestCase):
+    def test_presence_flagged_in_health_visual(self):
+        data = build_project_slide_data(_result("o/a", HEALTHY, adopters=_adopters("o/a", True)))
+        self.assertTrue(data.health.has_adopters)
+        lines = _health_lines(data.health)
+        self.assertTrue(any("Adopters: documented" in ln for ln in lines))
+
+    def test_no_adopters_line_when_absent(self):
+        data = build_project_slide_data(_result("o/a", HEALTHY, adopters=_adopters("o/a", False)))
+        self.assertFalse(data.health.has_adopters)
+        lines = _health_lines(data.health)
+        self.assertTrue(any("none listed" in ln for ln in lines))
+
+    def test_absent_when_no_adopters_attr(self):
+        # A result without any adopters info -> treated as not present.
+        data = build_project_slide_data(_result("o/a", HEALTHY, adopters=None))
+        self.assertFalse(data.health.has_adopters)
+
+    def test_adopters_folded_into_health_not_separate_visual(self):
+        # The slide has exactly the three top visuals; adopters is not a 4th.
+        from pptx import Presentation
+
+        with tempfile.TemporaryDirectory() as d:
+            out = os.path.join(d, "deck.pptx")
+            build_presentation([_result("o/a", HEALTHY, adopters=_adopters("o/a", True))], out)
+            prs = Presentation(out)
+
+            def slide_text(slide):
+                return "\n".join(
+                    s.text_frame.text for s in slide.shapes if s.has_text_frame
+                )
+
+            first = slide_text(prs.slides[0])
+            # Adopters appears inside the Project health box, with no own heading.
+            self.assertIn("Adopters: documented", first)
+            # Still exactly the three visual titles.
+            self.assertIn("Project health", first)
+            self.assertIn("Project direction", first)
+            self.assertIn("Top contributors", first)
 
 
 class StripMarkdownTests(unittest.TestCase):

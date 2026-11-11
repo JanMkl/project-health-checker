@@ -49,6 +49,11 @@ Any other shell command is disallowed.
   be accessed.
 - Each entry must be a public GitHub repository in `owner/name` form; the agent
   reads git history and the public issues/pull-requests API only.
+- As read-only metadata *about* an allowed project, the agent may also fetch an
+  `ADOPTERS` file from that project's owner's conventional community locations —
+  the `<owner>/community` and `<owner>/.github` repositories — since by
+  convention (e.g. CNCF projects) the adopters list lives there rather than in
+  the project repo. No other content is read from those repositories.
 - To grant or revoke access to a project, edit `repos.toml`; do not hard-code a
   separate allow-list here that could drift from the configuration.
 

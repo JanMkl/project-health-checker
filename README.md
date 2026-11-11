@@ -21,11 +21,17 @@ For each repository, orchestrated by `run_repo`:
    `curl` against the GitHub REST API.
 4. **Pull requests tool** (`pulls_tool.py`) — fetches both open and closed
    (including merged) pull requests.
-5. **Health classification** (`health.py`) — deterministically sorts the repo
+5. **Adopters tool** (`adopters_tool.py`) — looks for the project's
+   `ADOPTERS.md`. Following the CNCF convention, this file usually lives in the
+   owner's central community repo (e.g. `metal3-io/community/ADOPTERS.md`)
+   rather than the project repo, so the tool probes `<owner>/community`,
+   `<owner>/.github`, and the project repo, using the first one found.
+6. **Health classification** (`health.py`) — deterministically sorts the repo
    into `healthy`, `attention`, or `investigate` from the collected counts.
-6. **Memo generation** (`memo.py`) — builds a prompt from the commits, issues,
-   and pull requests and pipes it to the selected AI CLI backend
-   (`backends.py`) for the Markdown memo.
+7. **Memo generation** (`memo.py`) — builds a prompt from the commits, issues,
+   pull requests, and adopters, and pipes it to the selected AI CLI backend
+   (`backends.py`) for the Markdown memo (which now includes an Adopters
+   section when a list is found).
 
 Across all repos, `run_fleet` writes `output/fleet-report.md` grouping projects
 into: requires management attention, needs investigation / keep an eye on, and
@@ -305,7 +311,13 @@ the Markdown memos and fleet report. The deck has:
   side — **project health**, **project direction**, and **top contributors**.
   Health and contributors are derived deterministically from the collected git
   log, issues, and pull requests (bot/automation accounts are excluded from the
-  contributor ranking). Project direction is a single sentence taken from the
+  contributor ranking). The project-health visual also folds in a one-line
+  adopters signal — whether a public ADOPTERS list exists ("documented" vs
+  "none listed"). It reports presence rather than a count because ADOPTERS
+  formats are not standardised (tables, lists, or a stub linking to an external
+  page); the memo carries the qualitative detail, and this does not warrant a
+  visual of its own since many projects have no list.
+  Project direction is a single sentence taken from the
   memo: the memo prompt asks the AI CLI to end its "Direction" section with an
   explicit `**Direction summary:**` one-liner, which the slide uses verbatim
   (older memos without the marker fall back to a heuristic summary). Below the

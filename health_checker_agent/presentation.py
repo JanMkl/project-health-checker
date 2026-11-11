@@ -156,6 +156,13 @@ def build_project_slide_data(result, state_text: str | None = None) -> ProjectSl
             overall assessment) rather than the full memo, so it does not repeat
             what the three top visuals already show.
     """
+    # Adopters is optional context (not every project publishes a list); fold
+    # its presence into the health visual rather than giving it a visual of its
+    # own. Presence only, not a count — ADOPTERS formats vary too much to count
+    # reliably; the AI memo carries the qualitative detail.
+    adopters = getattr(result, "adopters", None)
+    has_adopters = bool(adopters is not None and adopters.found)
+
     metrics = health_metrics(
         result.assessment.category,
         result.assessment.reason,
@@ -164,6 +171,7 @@ def build_project_slide_data(result, state_text: str | None = None) -> ProjectSl
         result.closed_issues,
         result.open_pulls,
         result.closed_pulls,
+        has_adopters=has_adopters,
     )
     direction = project_direction(result.memo_markdown)
     contributors = top_contributors(
@@ -267,6 +275,17 @@ def _add_visual_box(slide, left, top, width, height, title, lines, *, accent=Non
     return box
 
 
+def _adopters_line(health: HealthMetrics) -> str:
+    """One-liner about adopters presence, folded into the health visual.
+
+    Presence only: ADOPTERS formats are not standardised, so we report whether a
+    list exists rather than a (fragile) count.
+    """
+    if health.has_adopters:
+        return "\u2b50 Adopters: documented"
+    return "Adopters: none listed"
+
+
 def _health_lines(health: HealthMetrics) -> List[str]:
     label = _CATEGORY_LABELS.get(health.category, health.category)
     return [
@@ -274,6 +293,7 @@ def _health_lines(health: HealthMetrics) -> List[str]:
         f"Commits: {health.commits}",
         f"Open: {health.open_work} (issues {health.open_issues}, PRs {health.open_pulls})",
         f"Closed: {health.closed_work} (issues {health.closed_issues}, PRs {health.closed_pulls})",
+        _adopters_line(health),
     ]
 
 
