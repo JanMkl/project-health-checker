@@ -30,6 +30,7 @@ from .health import FAILED, HealthAssessment, classify_health
 from .issues_tool import IssueCollection, read_issues
 from .memo import generate_memo
 from .pulls_tool import PullRequestCollection, read_pull_requests
+from .security_tool import SecurityPolicy, read_security_policy
 from .state import (
     compute_fingerprint,
     load_fingerprint,
@@ -56,6 +57,7 @@ class RepoResult:
     memo_path: str
     analysed: bool  # True if kiro-cli ran this time, False if memo was reused
     adopters: Adopters | None = None  # ADOPTERS info when found
+    security: SecurityPolicy | None = None  # SECURITY policy info when found
 
 
 @dataclass(frozen=True)
@@ -125,12 +127,16 @@ def run_repo(
     open_pulls = read_pull_requests(repo, state="open", token=token)
     closed_pulls = read_pull_requests(repo, state="closed", token=token)
 
-    # ADOPTERS is best-effort extra context; a failure to fetch it must not
-    # abort the analysis.
+    # ADOPTERS and SECURITY are best-effort extra context; a failure to fetch
+    # either must not abort the analysis.
     try:
         adopters = read_adopters(repo, token=token)
     except Exception:  # noqa: BLE001 - optional context only
         adopters = Adopters(repo=repo, source=None, content=None)
+    try:
+        security = read_security_policy(repo, token=token)
+    except Exception:  # noqa: BLE001 - optional context only
+        security = SecurityPolicy(repo=repo, source=None, content=None)
 
     assessment = classify_health(
         repo, git_log, open_issues, closed_issues, open_pulls, closed_pulls
@@ -167,6 +173,7 @@ def run_repo(
             memo_path=memo_path,
             analysed=False,
             adopters=adopters,
+            security=security,
         )
 
     memo_markdown = generate_memo(
@@ -176,6 +183,7 @@ def run_repo(
         open_pulls=open_pulls,
         closed_pulls=closed_pulls,
         adopters=adopters,
+        security=security,
         backend=backend,
     )
     with open(memo_path, "w", encoding="utf-8") as fh:
@@ -196,6 +204,7 @@ def run_repo(
         memo_path=memo_path,
         analysed=True,
         adopters=adopters,
+        security=security,
     )
 
 

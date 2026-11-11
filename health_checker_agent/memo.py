@@ -1,10 +1,10 @@
 """Generate a management memo via a pluggable AI-CLI backend.
 
 Builds a prompt from the git log, issues (open + closed), pull requests
-(open + closed), and the project's ADOPTERS list (when found), then asks an AI
-coding CLI (``kiro-cli`` by default, or ``codex`` / ``cursor-agent``) to write a
-markdown management memo analysing project direction, active contributors,
-adopters, and project health.
+(open + closed), the project's ADOPTERS list, and its security policy (when
+found), then asks an AI coding CLI (``kiro-cli`` by default, or ``codex`` /
+``cursor-agent``) to write a markdown management memo analysing project
+direction, active contributors, adopters, security process, and project health.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from .pulls_tool import PullRequestCollection
 
 if TYPE_CHECKING:  # avoid an import cycle at runtime; only needed for typing
     from .adopters_tool import Adopters
+    from .security_tool import SecurityPolicy
 
 _PROMPT_TEMPLATE = """\
 You are a technical program manager. Using the project activity below, write a \
@@ -59,6 +60,19 @@ state that the project maintains a public adopters list (and mention the linked 
 page if given), without implying the list is empty. Only if NO ADOPTERS file \
 was found at all, state briefly that no public adopters list is available. \
 Never invent adopters.
+- "## Security Process" — base this section on the "Security policy" data \
+below. The presence of a SECURITY.md or SECURITY_CONTACTS file means the \
+project has a documented security disclosure and response process. If a policy \
+is present, briefly describe how vulnerabilities are reported and handled, then \
+assess whether it follows responsible-disclosure best practices — look for: a \
+PRIVATE reporting channel (a security email, GitHub private vulnerability \
+reporting, or similar) rather than public issues; a stated response/triage \
+timeline or acknowledgement expectation; coordinated disclosure / embargo \
+handling; and named security contacts or a security team. Call out any of these \
+that are clearly present or clearly missing. If NO security policy file was \
+found, state that the project has no documented security disclosure process, \
+and flag this as a security-governance gap. Do not invent policy details that \
+are not in the provided content.
 - "## Risks" — a bulleted list of the key risks warranting management \
 attention. Each bullet should be a brief, self-contained risk statement.
 - A final closing line, on its own, prefixed verbatim with \
@@ -88,9 +102,13 @@ Markdown only, with no surrounding commentary.
 
 ## Adopters
 {adopters}
+
+## Security policy
+{security}
 """
 
 _NO_ADOPTERS_TEXT = "(no ADOPTERS file found)"
+_NO_SECURITY_TEXT = "(no SECURITY.md or SECURITY_CONTACTS file found)"
 
 
 def build_prompt(
@@ -101,9 +119,11 @@ def build_prompt(
     open_pulls: PullRequestCollection,
     closed_pulls: PullRequestCollection,
     adopters: "Adopters | None" = None,
+    security: "SecurityPolicy | None" = None,
 ) -> str:
     """Build the AI-CLI prompt from the collected activity."""
     adopters_text = adopters.to_text() if adopters is not None else _NO_ADOPTERS_TEXT
+    security_text = security.to_text() if security is not None else _NO_SECURITY_TEXT
     return _PROMPT_TEMPLATE.format(
         git_log=git_log.to_text(),
         open_issues=open_issues.to_text(),
@@ -111,6 +131,7 @@ def build_prompt(
         open_pulls=open_pulls.to_text(),
         closed_pulls=closed_pulls.to_text(),
         adopters=adopters_text,
+        security=security_text,
     )
 
 
@@ -122,6 +143,7 @@ def generate_memo(
     open_pulls: PullRequestCollection,
     closed_pulls: PullRequestCollection,
     adopters: "Adopters | None" = None,
+    security: "SecurityPolicy | None" = None,
     backend: str = DEFAULT_BACKEND,
     timeout: float | None = 300,
 ) -> str:
@@ -134,6 +156,7 @@ def generate_memo(
         open_pulls: Open pull requests.
         closed_pulls: Closed pull requests.
         adopters: Optional ADOPTERS information for the project.
+        security: Optional security-policy information for the project.
         backend: Which AI CLI to invoke (``kiro-cli``, ``codex``, or
             ``cursor-agent``).
         timeout: Optional command timeout in seconds.
@@ -151,6 +174,7 @@ def generate_memo(
         open_pulls=open_pulls,
         closed_pulls=closed_pulls,
         adopters=adopters,
+        security=security,
     )
     # Each backend runs its tool non-interactively, feeding the prompt on stdin
     # (prompts for large repos can exceed the OS argument-length limit) and

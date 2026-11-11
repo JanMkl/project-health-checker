@@ -162,6 +162,10 @@ def build_project_slide_data(result, state_text: str | None = None) -> ProjectSl
     # reliably; the AI memo carries the qualitative detail.
     adopters = getattr(result, "adopters", None)
     has_adopters = bool(adopters is not None and adopters.found)
+    # Likewise fold the presence of a documented security process into the
+    # health visual; the memo assesses whether it follows best practices.
+    security = getattr(result, "security", None)
+    has_security = bool(security is not None and security.found)
 
     metrics = health_metrics(
         result.assessment.category,
@@ -172,6 +176,7 @@ def build_project_slide_data(result, state_text: str | None = None) -> ProjectSl
         result.open_pulls,
         result.closed_pulls,
         has_adopters=has_adopters,
+        has_security_policy=has_security,
     )
     direction = project_direction(result.memo_markdown)
     contributors = top_contributors(
@@ -286,6 +291,17 @@ def _adopters_line(health: HealthMetrics) -> str:
     return "Adopters: none listed"
 
 
+def _security_line(health: HealthMetrics) -> str:
+    """One-liner about the security process, folded into the health visual.
+
+    Presence only: whether the project has a documented security disclosure
+    process. Whether it follows best practices is assessed in the memo.
+    """
+    if health.has_security_policy:
+        return "\U0001f512 Security policy: documented"
+    return "Security policy: none found"
+
+
 def _health_lines(health: HealthMetrics) -> List[str]:
     label = _CATEGORY_LABELS.get(health.category, health.category)
     return [
@@ -294,6 +310,7 @@ def _health_lines(health: HealthMetrics) -> List[str]:
         f"Open: {health.open_work} (issues {health.open_issues}, PRs {health.open_pulls})",
         f"Closed: {health.closed_work} (issues {health.closed_issues}, PRs {health.closed_pulls})",
         _adopters_line(health),
+        _security_line(health),
     ]
 
 

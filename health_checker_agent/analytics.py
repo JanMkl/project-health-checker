@@ -58,6 +58,10 @@ class HealthMetrics:
     # an external page), so a count would be fragile. Folded into the health
     # visual rather than given its own visual, since many projects have none.
     has_adopters: bool = False
+    # Whether a SECURITY.md / SECURITY_CONTACTS file was found — i.e. the project
+    # has a documented security disclosure/response process. Presence only;
+    # whether it follows best practices is assessed qualitatively in the memo.
+    has_security_policy: bool = False
 
     @property
     def open_work(self) -> int:
@@ -91,11 +95,13 @@ def health_metrics(
     open_pulls: PullRequestCollection,
     closed_pulls: PullRequestCollection,
     has_adopters: bool = False,
+    has_security_policy: bool = False,
 ) -> HealthMetrics:
     """Bundle the health category with the activity counts behind it.
 
-    ``has_adopters`` indicates whether an ADOPTERS file was found; it is carried
-    on the metrics so the health visual can show its presence as a one-liner.
+    ``has_adopters`` / ``has_security_policy`` indicate whether an ADOPTERS /
+    SECURITY file was found; they are carried on the metrics so the health
+    visual can show their presence as one-liners.
     """
     return HealthMetrics(
         category=category,
@@ -106,6 +112,7 @@ def health_metrics(
         open_pulls=open_pulls.count,
         closed_pulls=closed_pulls.count,
         has_adopters=has_adopters,
+        has_security_policy=has_security_policy,
     )
 
 

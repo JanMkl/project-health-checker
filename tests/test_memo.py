@@ -66,8 +66,9 @@ class MemoTests(unittest.TestCase):
         # Prompt requires the explicit one-sentence direction summary marker,
         # which the presentation export relies on.
         self.assertIn("**Direction summary:**", prompt)
-        # The memo now also has an Adopters section.
+        # The memo now also has Adopters and Security Process sections.
         self.assertIn("## Adopters", prompt)
+        self.assertIn("## Security Process", prompt)
 
     def test_build_prompt_includes_adopters_when_present(self):
         from health_checker_agent.adopters_tool import Adopters
@@ -102,6 +103,40 @@ class MemoTests(unittest.TestCase):
         )
         self.assertIn("## Adopters", prompt)
         self.assertIn("no ADOPTERS file found", prompt)
+
+    def test_build_prompt_includes_security_when_present(self):
+        from health_checker_agent.security_tool import SecurityPolicy
+
+        open_issues, closed_issues, open_pulls, closed_pulls = _sample_activity()
+        security = SecurityPolicy(
+            repo="octocat/Hello-World",
+            source="octocat/Hello-World:SECURITY.md",
+            content="# Security Policy\n\nReport privately to security@example.com",
+        )
+        prompt = build_prompt(
+            _sample_log(),
+            open_issues=open_issues,
+            closed_issues=closed_issues,
+            open_pulls=open_pulls,
+            closed_pulls=closed_pulls,
+            security=security,
+        )
+        self.assertIn("## Security policy", prompt)  # data block
+        self.assertIn("security@example.com", prompt)
+        # The instruction asks the AI to assess responsible-disclosure practices.
+        self.assertIn("responsible-disclosure best practices", prompt)
+
+    def test_build_prompt_marks_missing_security(self):
+        open_issues, closed_issues, open_pulls, closed_pulls = _sample_activity()
+        prompt = build_prompt(
+            _sample_log(),
+            open_issues=open_issues,
+            closed_issues=closed_issues,
+            open_pulls=open_pulls,
+            closed_pulls=closed_pulls,
+            security=None,
+        )
+        self.assertIn("no SECURITY.md or SECURITY_CONTACTS file found", prompt)
 
     @mock.patch("health_checker_agent.memo.run_command")
     def test_generate_memo_defaults_to_kiro_cli(self, mock_run):

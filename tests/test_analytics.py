@@ -76,6 +76,25 @@ class HealthMetricsTests(unittest.TestCase):
         )
         self.assertTrue(m.has_adopters)
 
+    def test_carries_security_policy_presence(self):
+        m = health_metrics(
+            "healthy",
+            "looks good",
+            _log(["a"]),
+            _issues("open", []),
+            _issues("closed", []),
+            _pulls("open", []),
+            _pulls("closed", []),
+            has_security_policy=True,
+        )
+        self.assertTrue(m.has_security_policy)
+        # Defaults to False when not supplied.
+        default = health_metrics(
+            "healthy", "r", _log(["a"]), _issues("open", []), _issues("closed", []),
+            _pulls("open", []), _pulls("closed", []),
+        )
+        self.assertFalse(default.has_security_policy)
+
 
 class TopContributorsTests(unittest.TestCase):
     def test_ranks_by_combined_activity(self):
