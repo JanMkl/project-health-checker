@@ -94,6 +94,20 @@ class HealthMetricsTests(unittest.TestCase):
             _pulls("open", []), _pulls("closed", []),
         )
         self.assertFalse(default.has_security_policy)
+        self.assertFalse(default.has_owners)
+
+    def test_carries_owners_presence(self):
+        m = health_metrics(
+            "healthy",
+            "looks good",
+            _log(["a"]),
+            _issues("open", []),
+            _issues("closed", []),
+            _pulls("open", []),
+            _pulls("closed", []),
+            has_owners=True,
+        )
+        self.assertTrue(m.has_owners)
 
 
 class TopContributorsTests(unittest.TestCase):

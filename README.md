@@ -31,12 +31,17 @@ For each repository, orchestrated by `run_repo`:
    org-level `<owner>/.github` default. Its presence signals a documented
    security disclosure/response process; its content lets the memo assess
    whether that process follows responsible-disclosure best practices.
-7. **Health classification** (`health.py`) — deterministically sorts the repo
+7. **Owners tool** (`owners_tool.py`) — looks for an `OWNERS` file (no `.md`
+   extension) in the project repo root or `.github/`. It lists the project's
+   reviewers and approvers/maintainers, so its presence signals transparency
+   about who holds merge authority. It is project-specific, so only the project
+   repo is probed.
+8. **Health classification** (`health.py`) — deterministically sorts the repo
    into `healthy`, `attention`, or `investigate` from the collected counts.
-8. **Memo generation** (`memo.py`) — builds a prompt from the commits, issues,
-   pull requests, adopters, and security policy, and pipes it to the selected
-   AI CLI backend (`backends.py`) for the Markdown memo (which includes Adopters
-   and Security Process sections).
+9. **Memo generation** (`memo.py`) — builds a prompt from the commits, issues,
+   pull requests, adopters, security policy, and owners, and pipes it to the
+   selected AI CLI backend (`backends.py`) for the Markdown memo (which includes
+   Adopters, Security Process, and Governance (Owners) sections).
 
 Across all repos, `run_fleet` writes `output/fleet-report.md` grouping projects
 into: requires management attention, needs investigation / keep an eye on, and
@@ -316,14 +321,14 @@ the Markdown memos and fleet report. The deck has:
   side — **project health**, **project direction**, and **top contributors**.
   Health and contributors are derived deterministically from the collected git
   log, issues, and pull requests (bot/automation accounts are excluded from the
-  contributor ranking). The project-health visual also folds in two one-line
-  governance signals: whether a public ADOPTERS list exists ("documented" vs
-  "none listed") and whether a security policy exists ("documented" vs "none
-  found"). Both report presence rather than detail — ADOPTERS formats are not
-  standardised, and whether a security process follows best practices is a
-  qualitative judgement — so the memo carries the depth while the visual carries
-  the binary fact. These do not warrant visuals of their own since many
-  projects have neither.
+  contributor ranking). The project-health visual also folds in three one-line
+  governance signals: whether a public ADOPTERS list, a security policy, and an
+  OWNERS file exist ("documented" vs "none"). They report presence rather than
+  detail — ADOPTERS formats are not standardised, whether a security process
+  follows best practices is a qualitative judgement, and OWNERS content is
+  project-specific — so the memo carries the depth while the visual carries the
+  binary fact. These do not warrant visuals of their own since many projects
+  have none.
   Project direction is a single sentence taken from the
   memo: the memo prompt asks the AI CLI to end its "Direction" section with an
   explicit `**Direction summary:**` one-liner, which the slide uses verbatim

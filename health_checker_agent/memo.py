@@ -1,10 +1,11 @@
 """Generate a management memo via a pluggable AI-CLI backend.
 
 Builds a prompt from the git log, issues (open + closed), pull requests
-(open + closed), the project's ADOPTERS list, and its security policy (when
-found), then asks an AI coding CLI (``kiro-cli`` by default, or ``codex`` /
-``cursor-agent``) to write a markdown management memo analysing project
-direction, active contributors, adopters, security process, and project health.
+(open + closed), the project's ADOPTERS list, its security policy, and its
+OWNERS file (when found), then asks an AI coding CLI (``kiro-cli`` by default,
+or ``codex`` / ``cursor-agent``) to write a markdown management memo analysing
+project direction, active contributors, adopters, security process, governance,
+and project health.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from .pulls_tool import PullRequestCollection
 
 if TYPE_CHECKING:  # avoid an import cycle at runtime; only needed for typing
     from .adopters_tool import Adopters
+    from .owners_tool import Owners
     from .security_tool import SecurityPolicy
 
 _PROMPT_TEMPLATE = """\
@@ -73,6 +75,16 @@ that are clearly present or clearly missing. If NO security policy file was \
 found, state that the project has no documented security disclosure process, \
 and flag this as a security-governance gap. Do not invent policy details that \
 are not in the provided content.
+- "## Governance (Owners)" — base this section on the "Owners" data below. An \
+OWNERS file lists the project's reviewers and approvers/maintainers (the people \
+with rights to merge pull requests). If an OWNERS file is present, note that \
+the project transparently documents who holds merge authority, and briefly \
+characterise it (e.g. the number of reviewers/approvers, or whether it \
+delegates to aliases/teams) as a signal of governance maturity and bus-factor. \
+If NO OWNERS file was found, state that the project does not publish an OWNERS \
+file, so merge-authority and reviewer transparency cannot be confirmed from it \
+(without assuming the project is poorly governed — not all projects use this \
+convention). Do not invent names.
 - "## Risks" — a bulleted list of the key risks warranting management \
 attention. Each bullet should be a brief, self-contained risk statement.
 - A final closing line, on its own, prefixed verbatim with \
@@ -105,10 +117,14 @@ Markdown only, with no surrounding commentary.
 
 ## Security policy
 {security}
+
+## Owners
+{owners}
 """
 
 _NO_ADOPTERS_TEXT = "(no ADOPTERS file found)"
 _NO_SECURITY_TEXT = "(no SECURITY.md or SECURITY_CONTACTS file found)"
+_NO_OWNERS_TEXT = "(no OWNERS file found)"
 
 
 def build_prompt(
@@ -120,10 +136,12 @@ def build_prompt(
     closed_pulls: PullRequestCollection,
     adopters: "Adopters | None" = None,
     security: "SecurityPolicy | None" = None,
+    owners: "Owners | None" = None,
 ) -> str:
     """Build the AI-CLI prompt from the collected activity."""
     adopters_text = adopters.to_text() if adopters is not None else _NO_ADOPTERS_TEXT
     security_text = security.to_text() if security is not None else _NO_SECURITY_TEXT
+    owners_text = owners.to_text() if owners is not None else _NO_OWNERS_TEXT
     return _PROMPT_TEMPLATE.format(
         git_log=git_log.to_text(),
         open_issues=open_issues.to_text(),
@@ -132,6 +150,7 @@ def build_prompt(
         closed_pulls=closed_pulls.to_text(),
         adopters=adopters_text,
         security=security_text,
+        owners=owners_text,
     )
 
 
@@ -144,6 +163,7 @@ def generate_memo(
     closed_pulls: PullRequestCollection,
     adopters: "Adopters | None" = None,
     security: "SecurityPolicy | None" = None,
+    owners: "Owners | None" = None,
     backend: str = DEFAULT_BACKEND,
     timeout: float | None = 300,
 ) -> str:
@@ -157,6 +177,7 @@ def generate_memo(
         closed_pulls: Closed pull requests.
         adopters: Optional ADOPTERS information for the project.
         security: Optional security-policy information for the project.
+        owners: Optional OWNERS (reviewers/maintainers) information.
         backend: Which AI CLI to invoke (``kiro-cli``, ``codex``, or
             ``cursor-agent``).
         timeout: Optional command timeout in seconds.
@@ -175,6 +196,7 @@ def generate_memo(
         closed_pulls=closed_pulls,
         adopters=adopters,
         security=security,
+        owners=owners,
     )
     # Each backend runs its tool non-interactively, feeding the prompt on stdin
     # (prompts for large repos can exceed the OS argument-length limit) and

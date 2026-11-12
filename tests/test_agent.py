@@ -80,6 +80,13 @@ class RunRepoTests(unittest.TestCase):
                 return_value=agent.SecurityPolicy(repo="o/r", source=None, content=None),
             )
         )
+        stack.enter_context(
+            mock.patch.object(
+                agent,
+                "read_owners",
+                return_value=agent.Owners(repo="o/r", source=None, content=None),
+            )
+        )
         return stack.enter_context(mock.patch.object(agent, "generate_memo", return_value=memo))
 
     def test_first_run_analyses_and_writes_memo(self):
@@ -124,6 +131,12 @@ class RunRepoTests(unittest.TestCase):
                     return_value=agent.SecurityPolicy(repo="o/r", source=None, content=None),
                 )
             )
+            stack.enter_context(
+                mock.patch.object(
+                    agent, "read_owners",
+                    return_value=agent.Owners(repo="o/r", source=None, content=None),
+                )
+            )
             mock_memo = stack.enter_context(mock.patch.object(agent, "generate_memo", return_value="# Memo"))
 
             result = run_repo("o/r", since="x", work_dir=os.path.join(d, "repos"), output_dir=d)
@@ -152,6 +165,12 @@ class RunRepoTests(unittest.TestCase):
                                   return_value=agent.Adopters(repo="o/r", source=None, content=None))
             )
             stack.enter_context(mock.patch.object(agent, "read_security_policy", return_value=security))
+            stack.enter_context(
+                mock.patch.object(
+                    agent, "read_owners",
+                    return_value=agent.Owners(repo="o/r", source=None, content=None),
+                )
+            )
             mock_memo = stack.enter_context(mock.patch.object(agent, "generate_memo", return_value="# Memo"))
 
             result = run_repo("o/r", since="x", work_dir=os.path.join(d, "repos"), output_dir=d)
@@ -179,11 +198,78 @@ class RunRepoTests(unittest.TestCase):
             stack.enter_context(
                 mock.patch.object(agent, "read_security_policy", side_effect=RuntimeError("network down"))
             )
+            stack.enter_context(
+                mock.patch.object(
+                    agent, "read_owners",
+                    return_value=agent.Owners(repo="o/r", source=None, content=None),
+                )
+            )
             mock_memo = stack.enter_context(mock.patch.object(agent, "generate_memo", return_value="# Memo"))
 
             result = run_repo("o/r", since="x", work_dir=os.path.join(d, "repos"), output_dir=d)
             self.assertTrue(result.analysed)
             self.assertFalse(result.security.found)
+
+    def test_owners_fetched_and_passed_to_memo(self):
+        import contextlib
+
+        owners = agent.Owners(
+            repo="o/r", source="o/r:OWNERS", content="approvers:\n- alice\nreviewers:\n- bob\n"
+        )
+        with tempfile.TemporaryDirectory() as d, contextlib.ExitStack() as stack:
+            stack.enter_context(mock.patch.object(agent, "clone_or_update", return_value="/tmp/c"))
+            stack.enter_context(mock.patch.object(agent, "read_git_log", return_value=_log(1)))
+            stack.enter_context(
+                mock.patch.object(agent, "read_issues", side_effect=lambda repo, *, state, token: _issues(state))
+            )
+            stack.enter_context(
+                mock.patch.object(agent, "read_pull_requests", side_effect=lambda repo, *, state, token: _pulls(state))
+            )
+            stack.enter_context(
+                mock.patch.object(agent, "read_adopters",
+                                  return_value=agent.Adopters(repo="o/r", source=None, content=None))
+            )
+            stack.enter_context(
+                mock.patch.object(agent, "read_security_policy",
+                                  return_value=agent.SecurityPolicy(repo="o/r", source=None, content=None))
+            )
+            stack.enter_context(mock.patch.object(agent, "read_owners", return_value=owners))
+            mock_memo = stack.enter_context(mock.patch.object(agent, "generate_memo", return_value="# Memo"))
+
+            result = run_repo("o/r", since="x", work_dir=os.path.join(d, "repos"), output_dir=d)
+
+            self.assertIs(result.owners, owners)
+            self.assertIs(mock_memo.call_args.kwargs["owners"], owners)
+
+    def test_owners_fetch_failure_does_not_abort(self):
+        import contextlib
+
+        with tempfile.TemporaryDirectory() as d, contextlib.ExitStack() as stack:
+            stack.enter_context(mock.patch.object(agent, "clone_or_update", return_value="/tmp/c"))
+            stack.enter_context(mock.patch.object(agent, "read_git_log", return_value=_log(1)))
+            stack.enter_context(
+                mock.patch.object(agent, "read_issues", side_effect=lambda repo, *, state, token: _issues(state))
+            )
+            stack.enter_context(
+                mock.patch.object(agent, "read_pull_requests", side_effect=lambda repo, *, state, token: _pulls(state))
+            )
+            stack.enter_context(
+                mock.patch.object(agent, "read_adopters",
+                                  return_value=agent.Adopters(repo="o/r", source=None, content=None))
+            )
+            stack.enter_context(
+                mock.patch.object(agent, "read_security_policy",
+                                  return_value=agent.SecurityPolicy(repo="o/r", source=None, content=None))
+            )
+            # read_owners raises; the analysis must still complete.
+            stack.enter_context(
+                mock.patch.object(agent, "read_owners", side_effect=RuntimeError("network down"))
+            )
+            mock_memo = stack.enter_context(mock.patch.object(agent, "generate_memo", return_value="# Memo"))
+
+            result = run_repo("o/r", since="x", work_dir=os.path.join(d, "repos"), output_dir=d)
+            self.assertTrue(result.analysed)
+            self.assertFalse(result.owners.found)
 
     def test_adopters_fetch_failure_does_not_abort(self):
         import contextlib
@@ -205,6 +291,12 @@ class RunRepoTests(unittest.TestCase):
                 mock.patch.object(
                     agent, "read_security_policy",
                     return_value=agent.SecurityPolicy(repo="o/r", source=None, content=None),
+                )
+            )
+            stack.enter_context(
+                mock.patch.object(
+                    agent, "read_owners",
+                    return_value=agent.Owners(repo="o/r", source=None, content=None),
                 )
             )
             mock_memo = stack.enter_context(mock.patch.object(agent, "generate_memo", return_value="# Memo"))

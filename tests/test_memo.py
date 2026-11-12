@@ -66,9 +66,11 @@ class MemoTests(unittest.TestCase):
         # Prompt requires the explicit one-sentence direction summary marker,
         # which the presentation export relies on.
         self.assertIn("**Direction summary:**", prompt)
-        # The memo now also has Adopters and Security Process sections.
+        # The memo now also has Adopters, Security Process, and Governance
+        # (Owners) sections.
         self.assertIn("## Adopters", prompt)
         self.assertIn("## Security Process", prompt)
+        self.assertIn("## Governance (Owners)", prompt)
 
     def test_build_prompt_includes_adopters_when_present(self):
         from health_checker_agent.adopters_tool import Adopters
@@ -137,6 +139,39 @@ class MemoTests(unittest.TestCase):
             security=None,
         )
         self.assertIn("no SECURITY.md or SECURITY_CONTACTS file found", prompt)
+
+    def test_build_prompt_includes_owners_when_present(self):
+        from health_checker_agent.owners_tool import Owners
+
+        open_issues, closed_issues, open_pulls, closed_pulls = _sample_activity()
+        owners = Owners(
+            repo="octocat/Hello-World",
+            source="octocat/Hello-World:OWNERS",
+            content="approvers:\n- alice\nreviewers:\n- bob\n",
+        )
+        prompt = build_prompt(
+            _sample_log(),
+            open_issues=open_issues,
+            closed_issues=closed_issues,
+            open_pulls=open_pulls,
+            closed_pulls=closed_pulls,
+            owners=owners,
+        )
+        self.assertIn("## Owners", prompt)  # data block
+        self.assertIn("approvers", prompt)
+        self.assertIn("alice", prompt)
+
+    def test_build_prompt_marks_missing_owners(self):
+        open_issues, closed_issues, open_pulls, closed_pulls = _sample_activity()
+        prompt = build_prompt(
+            _sample_log(),
+            open_issues=open_issues,
+            closed_issues=closed_issues,
+            open_pulls=open_pulls,
+            closed_pulls=closed_pulls,
+            owners=None,
+        )
+        self.assertIn("no OWNERS file found", prompt)
 
     @mock.patch("health_checker_agent.memo.run_command")
     def test_generate_memo_defaults_to_kiro_cli(self, mock_run):

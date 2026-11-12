@@ -166,6 +166,9 @@ def build_project_slide_data(result, state_text: str | None = None) -> ProjectSl
     # health visual; the memo assesses whether it follows best practices.
     security = getattr(result, "security", None)
     has_security = bool(security is not None and security.found)
+    # And whether the project publicly documents its reviewers/maintainers.
+    owners = getattr(result, "owners", None)
+    has_owners = bool(owners is not None and owners.found)
 
     metrics = health_metrics(
         result.assessment.category,
@@ -177,6 +180,7 @@ def build_project_slide_data(result, state_text: str | None = None) -> ProjectSl
         result.closed_pulls,
         has_adopters=has_adopters,
         has_security_policy=has_security,
+        has_owners=has_owners,
     )
     direction = project_direction(result.memo_markdown)
     contributors = top_contributors(
@@ -302,6 +306,17 @@ def _security_line(health: HealthMetrics) -> str:
     return "Security policy: none found"
 
 
+def _owners_line(health: HealthMetrics) -> str:
+    """One-liner about OWNERS presence, folded into the health visual.
+
+    Presence only: whether the project publicly documents its
+    reviewers/maintainers (who may merge).
+    """
+    if health.has_owners:
+        return "\U0001f465 Owners: documented"
+    return "Owners: none found"
+
+
 def _health_lines(health: HealthMetrics) -> List[str]:
     label = _CATEGORY_LABELS.get(health.category, health.category)
     return [
@@ -311,6 +326,7 @@ def _health_lines(health: HealthMetrics) -> List[str]:
         f"Closed: {health.closed_work} (issues {health.closed_issues}, PRs {health.closed_pulls})",
         _adopters_line(health),
         _security_line(health),
+        _owners_line(health),
     ]
 
 

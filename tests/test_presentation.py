@@ -9,6 +9,7 @@ from typing import Optional
 
 from health_checker_agent import presentation
 from health_checker_agent.adopters_tool import Adopters
+from health_checker_agent.owners_tool import Owners
 from health_checker_agent.security_tool import SecurityPolicy
 from health_checker_agent.analytics import HealthMetrics
 from health_checker_agent.git_log_tool import Commit, GitLog
@@ -38,6 +39,7 @@ class FakeResult:
     memo_markdown: str
     adopters: Optional[Adopters] = None
     security: Optional[SecurityPolicy] = None
+    owners: Optional[Owners] = None
 
 
 _DEFAULT_MEMO = (
@@ -55,7 +57,7 @@ _DEFAULT_MEMO = (
 )
 
 
-def _result(repo, category, *, commits=2, memo=_DEFAULT_MEMO, adopters=None, security=None):
+def _result(repo, category, *, commits=2, memo=_DEFAULT_MEMO, adopters=None, security=None, owners=None):
     log = GitLog(
         since="x",
         until=None,
@@ -87,6 +89,7 @@ def _result(repo, category, *, commits=2, memo=_DEFAULT_MEMO, adopters=None, sec
         memo_markdown=memo,
         adopters=adopters,
         security=security,
+        owners=owners,
     )
 
 
@@ -111,6 +114,17 @@ def _security(repo, present):
             content="# Security Policy\n\nReport privately to security@example.com",
         )
     return SecurityPolicy(repo=repo, source=None, content=None)
+
+
+def _owners(repo, present):
+    """Build an Owners that is present (any content) or absent."""
+    if present:
+        return Owners(
+            repo=repo,
+            source="o/r:OWNERS",
+            content="approvers:\n- alice\nreviewers:\n- bob\n",
+        )
+    return Owners(repo=repo, source=None, content=None)
 
 
 class AdoptersHealthVisualTests(unittest.TestCase):
@@ -187,6 +201,43 @@ class SecurityHealthVisualTests(unittest.TestCase):
             first = slide_text(prs.slides[0])
             self.assertIn("Security policy: documented", first)
             # Still exactly the three visual titles (no separate security visual).
+            self.assertIn("Project health", first)
+            self.assertIn("Project direction", first)
+            self.assertIn("Top contributors", first)
+
+
+class OwnersHealthVisualTests(unittest.TestCase):
+    def test_presence_flagged_in_health_visual(self):
+        data = build_project_slide_data(_result("o/a", HEALTHY, owners=_owners("o/a", True)))
+        self.assertTrue(data.health.has_owners)
+        lines = _health_lines(data.health)
+        self.assertTrue(any("Owners: documented" in ln for ln in lines))
+
+    def test_absence_shown_in_health_visual(self):
+        data = build_project_slide_data(_result("o/a", HEALTHY, owners=_owners("o/a", False)))
+        self.assertFalse(data.health.has_owners)
+        lines = _health_lines(data.health)
+        self.assertTrue(any("Owners: none found" in ln for ln in lines))
+
+    def test_absent_when_no_owners_attr(self):
+        data = build_project_slide_data(_result("o/a", HEALTHY, owners=None))
+        self.assertFalse(data.health.has_owners)
+
+    def test_owners_folded_into_health_not_separate_visual(self):
+        from pptx import Presentation
+
+        with tempfile.TemporaryDirectory() as d:
+            out = os.path.join(d, "deck.pptx")
+            build_presentation([_result("o/a", HEALTHY, owners=_owners("o/a", True))], out)
+            prs = Presentation(out)
+
+            def slide_text(slide):
+                return "\n".join(
+                    s.text_frame.text for s in slide.shapes if s.has_text_frame
+                )
+
+            first = slide_text(prs.slides[0])
+            self.assertIn("Owners: documented", first)
             self.assertIn("Project health", first)
             self.assertIn("Project direction", first)
             self.assertIn("Top contributors", first)

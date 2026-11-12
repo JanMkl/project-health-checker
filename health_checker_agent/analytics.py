@@ -62,6 +62,9 @@ class HealthMetrics:
     # has a documented security disclosure/response process. Presence only;
     # whether it follows best practices is assessed qualitatively in the memo.
     has_security_policy: bool = False
+    # Whether an OWNERS file was found — i.e. the project publicly documents its
+    # reviewers/approvers (who may merge). Presence only.
+    has_owners: bool = False
 
     @property
     def open_work(self) -> int:
@@ -96,12 +99,13 @@ def health_metrics(
     closed_pulls: PullRequestCollection,
     has_adopters: bool = False,
     has_security_policy: bool = False,
+    has_owners: bool = False,
 ) -> HealthMetrics:
     """Bundle the health category with the activity counts behind it.
 
-    ``has_adopters`` / ``has_security_policy`` indicate whether an ADOPTERS /
-    SECURITY file was found; they are carried on the metrics so the health
-    visual can show their presence as one-liners.
+    ``has_adopters`` / ``has_security_policy`` / ``has_owners`` indicate whether
+    an ADOPTERS / SECURITY / OWNERS file was found; they are carried on the
+    metrics so the health visual can show their presence as one-liners.
     """
     return HealthMetrics(
         category=category,
@@ -113,6 +117,7 @@ def health_metrics(
         closed_pulls=closed_pulls.count,
         has_adopters=has_adopters,
         has_security_policy=has_security_policy,
+        has_owners=has_owners,
     )
 
 

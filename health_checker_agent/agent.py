@@ -29,6 +29,7 @@ from .git_log_tool import GitLog, read_git_log
 from .health import FAILED, HealthAssessment, classify_health
 from .issues_tool import IssueCollection, read_issues
 from .memo import generate_memo
+from .owners_tool import Owners, read_owners
 from .pulls_tool import PullRequestCollection, read_pull_requests
 from .security_tool import SecurityPolicy, read_security_policy
 from .state import (
@@ -58,6 +59,7 @@ class RepoResult:
     analysed: bool  # True if kiro-cli ran this time, False if memo was reused
     adopters: Adopters | None = None  # ADOPTERS info when found
     security: SecurityPolicy | None = None  # SECURITY policy info when found
+    owners: Owners | None = None  # OWNERS (reviewers/maintainers) info when found
 
 
 @dataclass(frozen=True)
@@ -127,8 +129,8 @@ def run_repo(
     open_pulls = read_pull_requests(repo, state="open", token=token)
     closed_pulls = read_pull_requests(repo, state="closed", token=token)
 
-    # ADOPTERS and SECURITY are best-effort extra context; a failure to fetch
-    # either must not abort the analysis.
+    # ADOPTERS, SECURITY, and OWNERS are best-effort extra context; a failure to
+    # fetch any of them must not abort the analysis.
     try:
         adopters = read_adopters(repo, token=token)
     except Exception:  # noqa: BLE001 - optional context only
@@ -137,6 +139,10 @@ def run_repo(
         security = read_security_policy(repo, token=token)
     except Exception:  # noqa: BLE001 - optional context only
         security = SecurityPolicy(repo=repo, source=None, content=None)
+    try:
+        owners = read_owners(repo, token=token)
+    except Exception:  # noqa: BLE001 - optional context only
+        owners = Owners(repo=repo, source=None, content=None)
 
     assessment = classify_health(
         repo, git_log, open_issues, closed_issues, open_pulls, closed_pulls
@@ -174,6 +180,7 @@ def run_repo(
             analysed=False,
             adopters=adopters,
             security=security,
+            owners=owners,
         )
 
     memo_markdown = generate_memo(
@@ -184,6 +191,7 @@ def run_repo(
         closed_pulls=closed_pulls,
         adopters=adopters,
         security=security,
+        owners=owners,
         backend=backend,
     )
     with open(memo_path, "w", encoding="utf-8") as fh:
@@ -205,6 +213,7 @@ def run_repo(
         analysed=True,
         adopters=adopters,
         security=security,
+        owners=owners,
     )
 
 
